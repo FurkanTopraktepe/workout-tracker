@@ -1,0 +1,1818 @@
+<!DOCTYPE html>
+<html lang="tr">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Workout Tracker</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- React & ReactDOM -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+  <!-- Babel -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    body {
+      font-family: 'Outfit', sans-serif;
+      background-color: #f5f5f0;
+    }
+
+    /* Custom scrollbar for better UX */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background-color: rgba(0, 0, 0, 0.2);
+      border-radius: 3px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="env,react">
+    const { useState, useEffect } = React;
+
+    // --- Inline SVG Icons (Lucide) ---
+    // Replacing external dependency to ensure reliability
+
+    const Icon = ({ children, size = 24, fill = "none", stroke = "currentColor", strokeWidth = 2, ...props }) => (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        {...props}
+      >
+        {children}
+      </svg>
+    );
+
+    const Plus = (props) => (
+      <Icon {...props}>
+        <path d="M5 12h14" /><path d="M12 5v14" />
+      </Icon>
+    );
+
+    const ChevronLeft = (props) => (
+      <Icon {...props}>
+        <path d="m15 18-6-6 6-6" />
+      </Icon>
+    );
+
+    const Play = (props) => (
+      <Icon {...props}>
+        <polygon points="5 3 19 12 5 21 5 3" />
+      </Icon>
+    );
+
+    const Check = (props) => (
+      <Icon {...props}>
+        <polyline points="20 6 9 17 4 12" />
+      </Icon>
+    );
+
+    const X = (props) => (
+      <Icon {...props}>
+        <path d="M18 6 6 18" /><path d="m6 6 12 12" />
+      </Icon>
+    );
+
+    const Clock = (props) => (
+      <Icon {...props}>
+        <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
+      </Icon>
+    );
+
+    const Calendar = (props) => (
+      <Icon {...props}>
+        <rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" />
+      </Icon>
+    );
+
+    const Edit2 = (props) => (
+      <Icon {...props}>
+        <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+      </Icon>
+    );
+
+    const Trash2 = (props) => (
+      <Icon {...props}>
+        <path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" />
+      </Icon>
+    );
+
+    const Archive = (props) => (
+      <Icon {...props}>
+        <rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" />
+      </Icon>
+    );
+
+    const Settings = (props) => (
+      <Icon {...props}>
+        <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.47a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" />
+      </Icon>
+    );
+
+    const BarChart3 = (props) => (
+      <Icon {...props}>
+        <path d="M3 3v18h18" /><path d="M18 17V9" /><path d="M13 17V5" /><path d="M8 17v-3" />
+      </Icon>
+    );
+
+    const Folder = (props) => (
+      <Icon {...props}>
+        <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z" />
+      </Icon>
+    );
+
+    // --- Mock window.storage for Browser ---
+    if (!window.storage) {
+      window.storage = {
+        get: async (key) => {
+          const val = localStorage.getItem(key);
+          return val ? { value: val } : null;
+        },
+        set: async (key, val) => {
+          localStorage.setItem(key, val);
+        }
+      };
+    }
+
+    // --- Original Component Code (Modified Imports) ---
+
+    // General Modal Component
+    const Modal = ({ isOpen, title, onClose, onConfirm, initialValue, placeholder, options }) => {
+      const [value, setValue] = useState(initialValue || '');
+
+      useEffect(() => {
+        setValue(initialValue || '');
+      }, [initialValue, isOpen]);
+
+      if (!isOpen) return null;
+
+      return (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-end sm:justify-center z-50 transition-opacity"
+          onClick={onClose}
+        >
+          <div
+            className="bg-white border-t-2 sm:border-2 border-black p-6 w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl shadow-2xl transform transition-transform"
+            style={{ maxHeight: '90vh', overflowY: 'auto' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4 sm:hidden"></div>
+
+            <h3 className="text-xl font-bold mb-4" style={{ fontFamily: '"Outfit", sans-serif' }}>
+              {title}
+            </h3>
+
+            {options && options.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-4">
+                {options.map((option) => (
+                  <button
+                    key={option}
+                    onClick={() => setValue(option)}
+                    className={`px-3 py-1 text-sm border-2 rounded-full transition-colors ${value === option
+                      ? 'bg-black text-white border-black'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-black'}`}
+                    style={{ fontFamily: '"Outfit", sans-serif' }}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              placeholder={placeholder}
+              className="w-full border-2 border-gray-300 px-4 py-3 rounded-xl outline-none focus:border-black mb-6 text-lg"
+              style={{ fontFamily: '"Outfit", sans-serif' }}
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  onConfirm(value);
+                }
+              }}
+            />
+
+            <div className="flex gap-3">
+              <button
+                onClick={onClose}
+                className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 rounded-xl"
+                style={{ fontFamily: '"Outfit", sans-serif' }}
+              >
+                İptal
+              </button>
+              <button
+                onClick={() => onConfirm(value)}
+                className="flex-1 bg-black text-white py-3 border-2 border-black rounded-xl hover:shadow-lg transition-shadow font-bold"
+                style={{ fontFamily: '"Outfit", sans-serif' }}
+              >
+                Kaydet
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const WorkoutTracker = () => {
+      const [view, setView] = useState('home'); // home, editDay, activeWorkout, history, settings, programs
+      const [programs, setPrograms] = useState([]);
+      const [activeProgramId, setActiveProgramId] = useState(null);
+      const [program, setProgram] = useState(null);
+      const [selectedDay, setSelectedDay] = useState(null);
+      const [activeWorkout, setActiveWorkout] = useState(null);
+      const [workoutHistory, setWorkoutHistory] = useState([]);
+      const [workoutTime, setWorkoutTime] = useState(0);
+      const [loading, setLoading] = useState(true);
+      const [exerciseDetailModal, setExerciseDetailModal] = useState(null); // { dayIndex, exerciseId }
+      const [modalState, setModalState] = useState({
+        isOpen: false,
+        title: '',
+        initialValue: '',
+        placeholder: '',
+        onConfirm: null
+      });
+
+      // Load data from storage
+      useEffect(() => {
+        loadData();
+      }, []);
+
+      const loadData = async () => {
+        try {
+          // Load programs list
+          const programsResult = await window.storage.get('programs-list');
+          let programsList = [];
+          if (programsResult) {
+            programsList = JSON.parse(programsResult.value);
+            // Data Migration: Fix missing 'Pazar' or empty names
+            let changed = false;
+            programsList = programsList.map(p => {
+              if (p.days.length === 7 && !p.days[6].name) {
+                p.days[6].name = 'Pazar';
+                changed = true;
+              }
+              // Ensure all days have names
+              const baseDays = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+              p.days.forEach((d, i) => {
+                if (!d.name) {
+                  d.name = baseDays[i];
+                  changed = true;
+                }
+              });
+              return p;
+            });
+            if (changed) {
+              await window.storage.set('programs-list', JSON.stringify(programsList));
+            }
+          } else {
+            // Create default program
+            const defaultProgram = createDefaultProgram();
+            defaultProgram.id = Date.now();
+            programsList = [defaultProgram];
+            await window.storage.set('programs-list', JSON.stringify(programsList));
+          }
+          setPrograms(programsList);
+
+          // Load active program ID
+          const activeProgramResult = await window.storage.get('active-program-id');
+          let activeId = activeProgramResult ? JSON.parse(activeProgramResult.value) : programsList[0].id;
+          setActiveProgramId(activeId);
+
+          // Set active program
+          const activeProgram = programsList.find(p => p.id === activeId) || programsList[0];
+          setProgram(activeProgram);
+
+          // Load history
+          const historyResult = await window.storage.get('workout-history');
+          if (historyResult) {
+            setWorkoutHistory(JSON.parse(historyResult.value));
+          }
+        } catch (error) {
+          console.log('Error loading data:', error);
+          const defaultProgram = createDefaultProgram();
+          defaultProgram.id = Date.now();
+          setPrograms([defaultProgram]);
+          setActiveProgramId(defaultProgram.id);
+          setProgram(defaultProgram);
+        }
+        setLoading(false);
+      };
+
+      const createDefaultProgram = () => {
+        return {
+          id: Date.now(),
+          name: 'Spor Programım',
+          days: [
+            { name: 'Pazartesi', exercises: [] },
+            { name: 'Salı', exercises: [] },
+            { name: 'Çarşamba', exercises: [] },
+            { name: 'Perşembe', exercises: [] },
+            { name: 'Cuma', exercises: [] },
+            { name: 'Cumartesi', exercises: [] },
+            { name: 'Pazar', exercises: [] }
+          ]
+        };
+      };
+
+      const saveProgram = async (updatedProgram) => {
+        setProgram(updatedProgram);
+        // Update in programs list
+        const updatedPrograms = programs.map(p => p.id === updatedProgram.id ? updatedProgram : p);
+        setPrograms(updatedPrograms);
+        try {
+          await window.storage.set('programs-list', JSON.stringify(updatedPrograms));
+        } catch (error) {
+          console.error('Failed to save program:', error);
+        }
+      };
+
+      const savePrograms = async (updatedPrograms) => {
+        setPrograms(updatedPrograms);
+        try {
+          await window.storage.set('programs-list', JSON.stringify(updatedPrograms));
+        } catch (error) {
+          console.error('Failed to save programs:', error);
+        }
+      };
+
+      const setActiveProgram = async (programId) => {
+        setActiveProgramId(programId);
+        const selectedProgram = programs.find(p => p.id === programId);
+        if (selectedProgram) {
+          setProgram(selectedProgram);
+        }
+        try {
+          await window.storage.set('active-program-id', JSON.stringify(programId));
+        } catch (error) {
+          console.error('Failed to save active program:', error);
+        }
+      };
+
+      const saveHistory = async (updatedHistory) => {
+        setWorkoutHistory(updatedHistory);
+        try {
+          await window.storage.set('workout-history', JSON.stringify(updatedHistory));
+        } catch (error) {
+          console.error('Failed to save history:', error);
+        }
+      };
+
+      // Timer for active workout
+      useEffect(() => {
+        let interval;
+        if (activeWorkout) {
+          interval = setInterval(() => {
+            setWorkoutTime(prev => prev + 1);
+          }, 1000);
+        }
+        return () => clearInterval(interval);
+      }, [activeWorkout]);
+
+      const formatTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+      };
+
+      const formatDate = (dateString) => {
+        const date = new Date(dateString);
+        const months = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
+        return `${months[date.getMonth()]} ${date.getDate()}`;
+      };
+
+      const addExerciseToDay = (dayIndex) => {
+        const exercise = {
+          id: Date.now(),
+          name: 'Yeni Egzersiz',
+          sets: 3,
+          reps: 10,
+          weight: 0,
+          notes: '', // Added notes field
+          completed: false
+        };
+        const updated = { ...program };
+        updated.days[dayIndex].exercises.push(exercise);
+        saveProgram(updated);
+      };
+
+      const updateExercise = (dayIndex, exerciseId, field, value) => {
+        const updated = { ...program };
+        const exercise = updated.days[dayIndex].exercises.find(e => e.id === exerciseId);
+        if (exercise) {
+          exercise[field] = value;
+          saveProgram(updated);
+        }
+      };
+
+      const deleteExercise = (dayIndex, exerciseId) => {
+        const updated = { ...program };
+        updated.days[dayIndex].exercises = updated.days[dayIndex].exercises.filter(e => e.id !== exerciseId);
+        saveProgram(updated);
+      };
+
+      const startWorkout = (dayIndex) => {
+        const workout = {
+          dayIndex: dayIndex,
+          dayName: program.days[dayIndex].name,
+          exercises: JSON.parse(JSON.stringify(program.days[dayIndex].exercises)),
+          startTime: new Date().toISOString(),
+          notes: ''
+        };
+        setActiveWorkout(workout);
+        setWorkoutTime(0);
+        setView('activeWorkout');
+      };
+
+      const toggleExerciseComplete = (exerciseId) => {
+        const updated = { ...activeWorkout };
+        const exercise = updated.exercises.find(e => e.id === exerciseId);
+        if (exercise) {
+          exercise.completed = !exercise.completed;
+          setActiveWorkout(updated);
+        }
+      };
+
+      const finishWorkout = () => {
+        // Save to history
+        const completedWorkout = {
+          ...activeWorkout,
+          endTime: new Date().toISOString(),
+          duration: workoutTime,
+          id: Date.now()
+        };
+        const updatedHistory = [completedWorkout, ...workoutHistory];
+        saveHistory(updatedHistory);
+
+        setActiveWorkout(null);
+        setWorkoutTime(0);
+        setView('home');
+      };
+
+      const editDayExercises = (dayIndex) => {
+        setSelectedDay(dayIndex);
+        setView('editDay');
+      };
+
+      const renderContent = () => {
+        if (loading) {
+          return (
+            <div className="min-h-screen flex items-center justify-center" style={{
+              background: 'linear-gradient(#e5e5e5 1px, transparent 1px), linear-gradient(90deg, #e5e5e5 1px, transparent 1px)',
+              backgroundSize: '40px 40px',
+              backgroundColor: '#f5f5f0'
+            }}>
+              <div className="text-2xl" style={{ fontFamily: '"Outfit", sans-serif' }}>yükleniyor...</div>
+            </div>
+          );
+        }
+
+        // Home View - Modern iOS Style
+        if (view === 'home') {
+          // Get current day
+          const days = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+          const months = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+          const today = new Date();
+          const todayName = days[today.getDay()];
+          const todayIndex = (today.getDay() + 6) % 7; // Convert to Monday = 0
+          const todayProgram = program.days[todayIndex];
+
+          return (
+            <div className="min-h-screen p-5 pb-28" style={{
+              background: 'linear-gradient(#e5e5e5 1px, transparent 1px), linear-gradient(90deg, #e5e5e5 1px, transparent 1px)',
+              backgroundSize: '40px 40px',
+              backgroundColor: '#f5f5f0'
+            }}>
+              {/* Header */}
+              <div className="flex items-start justify-between mb-8 pt-4">
+                <div>
+                  <p className="text-sm text-gray-500 mb-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                    {todayName}, {today.getDate()} {months[today.getMonth()]}
+                  </p>
+                  <h1 className="text-4xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                    Hoşgeldin!
+                  </h1>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setView('history')}
+                    className="w-10 h-10 flex items-center justify-center bg-white border-2 border-black hover:shadow-md transition-shadow"
+                    style={{ borderRadius: '10px' }}
+                  >
+                    <Archive size={20} />
+                  </button>
+                  <button
+                    onClick={() => setView('settings')}
+                    className="w-10 h-10 flex items-center justify-center bg-white border-2 border-black hover:shadow-md transition-shadow"
+                    style={{ borderRadius: '10px' }}
+                  >
+                    <Settings size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Today's Workout - Compact Card */}
+              <div className="mb-6">
+                <h2 className="text-lg font-bold mb-3" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                  Bugünkü Antrenman
+                </h2>
+
+                <div
+                  className="bg-white border-2 border-black p-5"
+                  style={{
+                    borderRadius: '16px',
+                    boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)'
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-2xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                      {todayProgram.name}
+                    </h3>
+                    <button
+                      onClick={() => editDayExercises(todayIndex)}
+                      className="p-2 hover:bg-gray-50 rounded-lg"
+                    >
+                      <Edit2 size={20} />
+                    </button>
+                  </div>
+
+                  {todayProgram.exercises.length === 0 ? (
+                    <div className="text-center py-6">
+                      <p className="text-gray-400 mb-3" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        Bugün için egzersiz yok
+                      </p>
+                      <button
+                        onClick={() => editDayExercises(todayIndex)}
+                        className="text-sm border-2 border-black px-4 py-2 hover:bg-gray-50"
+                        style={{
+                          borderRadius: '8px',
+                          fontFamily: '"Outfit", sans-serif'
+                        }}
+                      >
+                        + Egzersiz Ekle
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1" style={{ scrollbarWidth: 'thin' }}>
+                      {todayProgram.exercises.map((exercise, idx) => (
+                        <div key={exercise.id} className="flex items-center gap-3 py-2 px-2 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                          <div className="w-7 h-7 rounded-full bg-black text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
+                            {idx + 1}
+                          </div>
+                          <div className="flex-1 min-w-0" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                            <div className="font-bold truncate">{exercise.name}</div>
+                            <div className="text-gray-500 text-sm">
+                              {exercise.sets}×{exercise.reps}
+                              {exercise.weight > 0 && ` • ${exercise.weight}kg`}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Weekly Program Card - Compact */}
+              <div className="mb-6">
+                <div
+                  onClick={() => setView('weeklyView')}
+                  className="bg-white border-2 border-black p-4 cursor-pointer hover:shadow-lg transition-shadow"
+                  style={{
+                    borderRadius: '16px',
+                    boxShadow: '3px 3px 0px 0px rgba(0,0,0,1)'
+                  }}
+                >
+                  {/* Header with title and expand icon */}
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <h2 className="text-sm text-gray-500 mb-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        Haftalık Program
+                      </h2>
+                      <h3 className="text-xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        {program.name}
+                      </h3>
+                    </div>
+                    <ChevronLeft size={24} className="rotate-180 text-gray-400" />
+                  </div>
+
+                  {/* Calendar Grid */}
+                  <div className="grid grid-cols-7 gap-1">
+                    {program.days.map((day, idx) => {
+                      const isToday = idx === todayIndex;
+                      const hasExercises = day.exercises.length > 0;
+
+                      return (
+                        <div
+                          key={idx}
+                          className={`text-center py-2 border-2 ${isToday ? 'bg-black text-white border-black' :
+                            hasExercises ? 'bg-white border-gray-300' : 'bg-gray-100 border-gray-200'
+                            }`}
+                          style={{ borderRadius: '8px' }}
+                        >
+                          <div className="text-xs font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                            {(() => {
+                              const shortNames = {
+                                'Pazartesi': 'Pzt',
+                                'Salı': 'Sal',
+                                'Çarşamba': 'Çar',
+                                'Perşembe': 'Per',
+                                'Cuma': 'Cum',
+                                'Cumartesi': 'Cmt',
+                                'Pazar': 'Paz'
+                              };
+                              return shortNames[day.name.split(' - ')[0].trim()] || day.name.trim().slice(0, 3);
+                            })()}
+                          </div>
+                          {hasExercises && (
+                            <div className="text-xs mt-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                              {day.exercises.length}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Bottom Buttons - Fixed at bottom - Always visible */}
+              <div className="fixed bottom-6 left-5 right-5 flex gap-3">
+                {/* Left Button - Statistics */}
+                <button
+                  onClick={() => setView('stats')}
+                  className="bg-white text-black py-4 px-4 border-2 border-black hover:shadow-xl transition-shadow flex items-center justify-center"
+                  style={{
+                    borderRadius: '16px',
+                    fontFamily: '"Outfit", sans-serif',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)',
+                    flex: '0 0 60px'
+                  }}
+                >
+                  <BarChart3 size={24} />
+                </button>
+
+                {/* Center Button - Start Workout (Longer) */}
+                <button
+                  onClick={() => todayProgram.exercises.length > 0 && startWorkout(todayIndex)}
+                  disabled={todayProgram.exercises.length === 0}
+                  className={`py-4 border-2 border-black transition-shadow flex items-center justify-center gap-3 ${todayProgram.exercises.length === 0
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-black text-white hover:shadow-xl'
+                    }`}
+                  style={{
+                    borderRadius: '16px',
+                    fontFamily: '"Outfit", sans-serif',
+                    fontSize: '18px',
+                    fontWeight: '600',
+                    boxShadow: todayProgram.exercises.length > 0 ? '5px 5px 0px 0px rgba(0,0,0,1)' : 'none',
+                    flex: '1'
+                  }}
+                >
+                  <Play size={22} fill={todayProgram.exercises.length > 0 ? "white" : "currentColor"} />
+                  Başla
+                </button>
+
+                {/* Right Button - Programs */}
+                <button
+                  onClick={() => setView('programs')}
+                  className="bg-white text-black py-4 px-4 border-2 border-black hover:shadow-xl transition-shadow flex items-center justify-center"
+                  style={{
+                    borderRadius: '16px',
+                    fontFamily: '"Outfit", sans-serif',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)',
+                    flex: '0 0 60px'
+                  }}
+                >
+                  <Folder size={24} />
+                </button>
+              </div>
+            </div>
+          );
+        }
+
+        // Weekly View - See all days
+        if (view === 'weeklyView') {
+          return (
+            <div className="min-h-screen p-4 pb-20" style={{
+              background: 'linear-gradient(#e5e5e5 1px, transparent 1px), linear-gradient(90deg, #e5e5e5 1px, transparent 1px)',
+              backgroundSize: '40px 40px',
+              backgroundColor: '#f5f5f0'
+            }}>
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6 pt-4">
+                <button
+                  onClick={() => setView('home')}
+                  className="w-10 h-10 flex items-center justify-center border-2 border-black"
+                  style={{ borderRadius: '8px' }}
+                >
+                  <ChevronLeft size={24} />
+                </button>
+
+                <h1 className="text-2xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                  {program.name}
+                </h1>
+
+                <div className="w-10" />
+              </div>
+
+              {/* All Days */}
+              <div className="space-y-4">
+                {program.days.map((day, dayIndex) => (
+                  <div
+                    key={dayIndex}
+                    className="bg-white border-2 border-black p-4"
+                    style={{
+                      borderRadius: '12px',
+                      boxShadow: '3px 3px 0px 0px rgba(0,0,0,1)'
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        {day.name}
+                      </h3>
+                      <button
+                        onClick={() => editDayExercises(dayIndex)}
+                        className="p-2 hover:bg-gray-50 rounded"
+                      >
+                        <Edit2 size={18} />
+                      </button>
+                    </div>
+
+                    {day.exercises.length === 0 ? (
+                      <p className="text-gray-400 text-sm mb-3" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        henüz egzersiz yok...
+                      </p>
+                    ) : (
+                      <div className="space-y-2 mb-3">
+                        {day.exercises.map((exercise) => (
+                          <div key={exercise.id} className="text-sm" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                            • {exercise.name} ({exercise.sets}×{exercise.reps} {exercise.weight > 0 ? `@ ${exercise.weight}kg` : ''})
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {day.exercises.length > 0 && (
+                      <button
+                        onClick={() => startWorkout(dayIndex)}
+                        className="w-full bg-black text-white py-2 border-2 border-black flex items-center justify-center gap-2 hover:shadow-lg transition-shadow"
+                        style={{
+                          borderRadius: '8px',
+                          fontFamily: '"Outfit", sans-serif',
+                          boxShadow: '2px 2px 0px 0px rgba(0,0,0,1)'
+                        }}
+                      >
+                        <Play size={16} fill="white" />
+                        Başla
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+        // Edit Day View
+        if (view === 'editDay' && selectedDay !== null) {
+          const day = program.days[selectedDay];
+
+          return (
+            <div className="min-h-screen p-4 pb-20" style={{
+              background: 'linear-gradient(#e5e5e5 1px, transparent 1px), linear-gradient(90deg, #e5e5e5 1px, transparent 1px)',
+              backgroundSize: '40px 40px',
+              backgroundColor: '#f5f5f0'
+            }}>
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6 pt-4">
+                <button
+                  onClick={() => setView('home')}
+                  className="w-10 h-10 flex items-center justify-center border-2 border-black"
+                  style={{ borderRadius: '8px' }}
+                >
+                  <ChevronLeft size={24} />
+                </button>
+
+                <div className="flex flex-col items-center">
+                  <h1
+                    className="text-2xl font-bold text-center"
+                    style={{ fontFamily: '"Outfit", sans-serif' }}
+                  >
+                    {day.name}
+                  </h1>
+                  <button
+                    onClick={() => {
+                      const baseDays = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+                      const baseName = baseDays[selectedDay];
+                      setModalState({
+                        isOpen: true,
+                        title: 'Günün Odak Noktası',
+                        placeholder: 'Örn: Bacak, Göğüs, Full Body',
+                        initialValue: day.name.includes('-') ? day.name.split('-')[1]?.trim() : '',
+                        options: ['Full Body', 'Upper Body', 'Lower Body', 'Push', 'Pull', 'Legs', 'Cardio', 'Rest'],
+                        onConfirm: (label) => {
+                          if (label !== null) {
+                            const updated = { ...program };
+                            updated.days[selectedDay].name = label.trim() ? `${baseName} - ${label.trim()}` : baseName;
+                            saveProgram(updated);
+                          }
+                        }
+                      });
+                    }}
+                    className="text-xs text-gray-500 mt-1 underline"
+                    style={{ fontFamily: '"Outfit", sans-serif' }}
+                  >
+                    Odak Noktası Ekle/Düzenle
+                  </button>
+                </div>
+
+                <div className="w-10" />
+              </div>
+
+              {/* Exercises */}
+              {day.exercises.length === 0 ? (
+                <div className="text-center py-16">
+                  <p className="text-xl mb-4" style={{ fontFamily: '"Outfit", sans-serif', color: '#999' }}>
+                    henüz egzersiz yok...
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 mb-20">
+                  {day.exercises.map((exercise) => (
+                    <div
+                      key={exercise.id}
+                      onClick={() => setExerciseDetailModal({ dayIndex: selectedDay, exerciseId: exercise.id })}
+                      className="bg-white border-2 border-black p-4 cursor-pointer hover:shadow-lg transition-shadow"
+                      style={{ borderRadius: '10px', boxShadow: '2px 2px 0px 0px rgba(0,0,0,1)' }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <h3 className="text-lg font-bold flex-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                          {exercise.name}
+                        </h3>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteExercise(selectedDay, exercise.id);
+                          }}
+                          className="p-2 hover:bg-red-50 rounded"
+                        >
+                          <Trash2 size={18} className="text-red-500" />
+                        </button>
+                      </div>
+
+                      <div className="flex items-center gap-4 text-sm text-gray-600" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        <span className="font-semibold">{exercise.sets} set × {exercise.reps} tekrar</span>
+                        {exercise.weight > 0 && <span>• {exercise.weight}kg</span>}
+                      </div>
+
+                      {exercise.notes && (
+                        <div className="mt-2 text-sm text-gray-500 italic" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                          "{exercise.notes}"
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Exercise Detail Modal */}
+              {exerciseDetailModal && (() => {
+                const exercise = program.days[exerciseDetailModal.dayIndex].exercises.find(
+                  e => e.id === exerciseDetailModal.exerciseId
+                );
+                if (!exercise) return null;
+
+                return (
+                  <div
+                    className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+                    onClick={() => setExerciseDetailModal(null)}
+                  >
+                    <div
+                      className="bg-white border-2 border-black p-6 max-w-md w-full max-h-[90vh] overflow-y-auto"
+                      style={{ borderRadius: '16px', boxShadow: '6px 6px 0px 0px rgba(0,0,0,1)' }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-2xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                          Egzersiz Detayları
+                        </h2>
+                        <button
+                          onClick={() => setExerciseDetailModal(null)}
+                          className="w-8 h-8 flex items-center justify-center hover:bg-gray-100 rounded-lg"
+                        >
+                          <X size={24} />
+                        </button>
+                      </div>
+
+                      <div className="space-y-4">
+                        {/* Exercise Name */}
+                        <div>
+                          <label className="text-sm text-gray-500 block mb-2" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                            Egzersiz Adı
+                          </label>
+                          <input
+                            type="text"
+                            value={exercise.name}
+                            onChange={(e) => updateExercise(exerciseDetailModal.dayIndex, exercise.id, 'name', e.target.value)}
+                            className="w-full text-xl font-bold border-2 border-gray-300 px-4 py-2 rounded-lg outline-none focus:border-black"
+                            style={{ fontFamily: '"Outfit", sans-serif' }}
+                          />
+                        </div>
+
+                        {/* Sets, Reps, Weight */}
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="text-sm text-gray-500 block mb-2" style={{ fontFamily: '"Outfit", sans-serif' }}>Set</label>
+                            <input
+                              type="number"
+                              value={exercise.sets}
+                              onChange={(e) => updateExercise(exerciseDetailModal.dayIndex, exercise.id, 'sets', parseInt(e.target.value) || 0)}
+                              className="w-full border-2 border-gray-300 px-3 py-2 text-center text-lg font-bold rounded-lg outline-none focus:border-black"
+                              style={{ fontFamily: '"Outfit", sans-serif' }}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm text-gray-500 block mb-2" style={{ fontFamily: '"Outfit", sans-serif' }}>Tekrar</label>
+                            <input
+                              type="number"
+                              value={exercise.reps}
+                              onChange={(e) => updateExercise(exerciseDetailModal.dayIndex, exercise.id, 'reps', parseInt(e.target.value) || 0)}
+                              className="w-full border-2 border-gray-300 px-3 py-2 text-center text-lg font-bold rounded-lg outline-none focus:border-black"
+                              style={{ fontFamily: '"Outfit", sans-serif' }}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-sm text-gray-500 block mb-2" style={{ fontFamily: '"Outfit", sans-serif' }}>Kg</label>
+                            <input
+                              type="number"
+                              value={exercise.weight}
+                              onChange={(e) => updateExercise(exerciseDetailModal.dayIndex, exercise.id, 'weight', parseInt(e.target.value) || 0)}
+                              className="w-full border-2 border-gray-300 px-3 py-2 text-center text-lg font-bold rounded-lg outline-none focus:border-black"
+                              style={{ fontFamily: '"Outfit", sans-serif' }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Notes */}
+                        <div>
+                          <label className="text-sm text-gray-500 block mb-2" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                            Notlar (opsiyonel)
+                          </label>
+                          <textarea
+                            value={exercise.notes || ''}
+                            onChange={(e) => updateExercise(exerciseDetailModal.dayIndex, exercise.id, 'notes', e.target.value)}
+                            placeholder="Örn: Tükenişe kadar devam et, tempoyu yavaşlat..."
+                            className="w-full border-2 border-gray-300 px-4 py-3 rounded-lg outline-none focus:border-black"
+                            rows="4"
+                            style={{ fontFamily: '"Outfit", sans-serif' }}
+                          />
+                        </div>
+
+                        {/* Close Button */}
+                        <button
+                          onClick={() => setExerciseDetailModal(null)}
+                          className="w-full bg-black text-white py-3 border-2 border-black hover:shadow-xl transition-shadow"
+                          style={{
+                            borderRadius: '12px',
+                            fontFamily: '"Outfit", sans-serif',
+                            fontSize: '16px',
+                            fontWeight: '600',
+                            boxShadow: '3px 3px 0px 0px rgba(0,0,0,1)'
+                          }}
+                        >
+                          Kaydet
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Add Exercise Button */}
+              <button
+                onClick={() => addExerciseToDay(selectedDay)}
+                className="fixed bottom-6 right-6 bg-black text-white w-14 h-14 flex items-center justify-center border-2 border-black hover:shadow-xl transition-shadow"
+                style={{
+                  borderRadius: '16px',
+                  boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)'
+                }}
+              >
+                <Plus size={28} />
+              </button>
+            </div>
+          );
+        }
+
+        // Active Workout View
+        if (view === 'activeWorkout' && activeWorkout) {
+          const completedCount = activeWorkout.exercises.filter(e => e.completed).length;
+          const totalCount = activeWorkout.exercises.length;
+
+          return (
+            <div className="min-h-screen p-4 pb-24" style={{
+              background: 'linear-gradient(#e5e5e5 1px, transparent 1px), linear-gradient(90deg, #e5e5e5 1px, transparent 1px)',
+              backgroundSize: '40px 40px',
+              backgroundColor: '#f5f5f0'
+            }}>
+              {/* Header */}
+              <div className="flex items-center justify-between mb-4 pt-4">
+                <button
+                  onClick={() => {
+                    if (confirm('Antrenmandan çıkmak istediğinize emin misiniz?')) {
+                      setActiveWorkout(null);
+                      setWorkoutTime(0);
+                      setView('home');
+                    }
+                  }}
+                  className="w-10 h-10 flex items-center justify-center border-2 border-black"
+                  style={{ borderRadius: '8px' }}
+                >
+                  <ChevronLeft size={24} />
+                </button>
+
+                <div className="text-center">
+                  <h1 className="text-2xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                    {activeWorkout.dayName}
+                  </h1>
+                  <p className="text-sm text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                    {completedCount} / {totalCount} tamamlandı
+                  </p>
+                </div>
+
+                <div className="w-10" />
+              </div>
+
+              {/* Timer */}
+              <div className="bg-white border-2 border-black p-4 mb-6 text-center" style={{ borderRadius: '12px' }}>
+                <div className="text-4xl font-bold mb-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                  {formatTime(workoutTime)}
+                </div>
+                <div className="text-sm text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                  süre
+                </div>
+              </div>
+
+              {/* Exercises */}
+              <div className="space-y-4 mb-6">
+                {activeWorkout.exercises.map((exercise, index) => (
+                  <div
+                    key={exercise.id}
+                    className={`bg-white border-2 border-black p-4 transition-all ${exercise.completed ? 'opacity-60' : ''}`}
+                    style={{
+                      borderRadius: '12px',
+                      boxShadow: exercise.completed ? 'none' : '3px 3px 0px 0px rgba(0,0,0,1)'
+                    }}
+                  >
+                    <div className="flex items-start gap-3">
+                      <button
+                        onClick={() => toggleExerciseComplete(exercise.id)}
+                        className={`w-8 h-8 border-2 border-black flex items-center justify-center flex-shrink-0 ${exercise.completed ? 'bg-black' : 'bg-white'
+                          }`}
+                        style={{ borderRadius: '50%' }}
+                      >
+                        {exercise.completed && <Check size={20} color="white" strokeWidth={3} />}
+                      </button>
+
+                      <div className="flex-1">
+                        <h3
+                          className={`text-xl font-bold mb-3 ${exercise.completed ? 'line-through' : ''}`}
+                          style={{ fontFamily: '"Outfit", sans-serif' }}
+                        >
+                          {index + 1}. {exercise.name}
+                        </h3>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="border-2 border-gray-300 p-2 text-center" style={{ borderRadius: '8px' }}>
+                            <div className="text-xs text-gray-500 mb-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                              SETS × REPS
+                            </div>
+                            <div className="text-xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                              {exercise.sets} × {exercise.reps}
+                            </div>
+                          </div>
+
+                          {exercise.weight > 0 && (
+                            <div className="border-2 border-gray-300 p-2 text-center" style={{ borderRadius: '8px' }}>
+                              <div className="text-xs text-gray-500 mb-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                                AĞIRLIK
+                              </div>
+                              <div className="text-xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                                {exercise.weight} kg
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Notes */}
+              <div className="bg-yellow-100 border-2 border-yellow-600 p-4 mb-6"
+                style={{
+                  borderRadius: '12px',
+                  boxShadow: '3px 3px 0px 0px rgba(202, 138, 4, 1)'
+                }}
+              >
+                <div className="text-sm font-bold mb-2" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                  NOTLAR:
+                </div>
+                <textarea
+                  value={activeWorkout.notes}
+                  onChange={(e) => setActiveWorkout({ ...activeWorkout, notes: e.target.value })}
+                  placeholder="Bugün nasıl hissettin?"
+                  className="w-full bg-transparent outline-none resize-none"
+                  style={{ fontFamily: '"Outfit", sans-serif', minHeight: '60px' }}
+                />
+              </div>
+
+              {/* Finish Button */}
+              <button
+                onClick={finishWorkout}
+                className="fixed bottom-6 left-4 right-4 bg-black text-white py-4 border-2 border-black hover:shadow-xl transition-shadow"
+                style={{
+                  borderRadius: '12px',
+                  fontFamily: '"Outfit", sans-serif',
+                  fontSize: '20px',
+                  boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)'
+                }}
+              >
+                Antrenmayı Bitir
+              </button>
+            </div>
+          );
+        }
+
+        // Stats View
+        if (view === 'stats') {
+          return (
+            <div className="min-h-screen p-4" style={{
+              background: 'linear-gradient(#e5e5e5 1px, transparent 1px), linear-gradient(90deg, #e5e5e5 1px, transparent 1px)',
+              backgroundSize: '40px 40px',
+              backgroundColor: '#f5f5f0'
+            }}>
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6 pt-4">
+                <button
+                  onClick={() => setView('home')}
+                  className="w-10 h-10 flex items-center justify-center border-2 border-black"
+                  style={{ borderRadius: '8px' }}
+                >
+                  <ChevronLeft size={24} />
+                </button>
+
+                <h1 className="text-2xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                  İstatistikler
+                </h1>
+
+                <div className="w-10" />
+              </div>
+
+              {/* Statistics Cards */}
+              <div className="space-y-4 mb-6">
+                {/* Total Workouts */}
+                <div className="bg-white border-2 border-black p-5" style={{ borderRadius: '12px', boxShadow: '3px 3px 0px 0px rgba(0,0,0,1)' }}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-purple-200 border-2 border-black flex items-center justify-center" style={{ borderRadius: '12px' }}>
+                      <BarChart3 size={28} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        Toplam Antrenman
+                      </p>
+                      <p className="text-4xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        {workoutHistory.length}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Total Time */}
+                <div className="bg-white border-2 border-black p-5" style={{ borderRadius: '12px', boxShadow: '3px 3px 0px 0px rgba(0,0,0,1)' }}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-blue-200 border-2 border-black flex items-center justify-center" style={{ borderRadius: '12px' }}>
+                      <Clock size={28} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        Toplam Süre
+                      </p>
+                      <p className="text-4xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        {Math.floor(workoutHistory.reduce((sum, w) => sum + w.duration, 0) / 60)} <span className="text-2xl">dk</span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* This Week */}
+                <div className="bg-white border-2 border-black p-5" style={{ borderRadius: '12px', boxShadow: '3px 3px 0px 0px rgba(0,0,0,1)' }}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-green-200 border-2 border-black flex items-center justify-center" style={{ borderRadius: '12px' }}>
+                      <Calendar size={28} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        Bu Hafta
+                      </p>
+                      <p className="text-4xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        {workoutHistory.filter(w => {
+                          const workoutDate = new Date(w.endTime);
+                          const now = new Date();
+                          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+                          return workoutDate >= weekAgo;
+                        }).length}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* This Month */}
+                <div className="bg-white border-2 border-black p-5" style={{ borderRadius: '12px', boxShadow: '3px 3px 0px 0px rgba(0,0,0,1)' }}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-orange-200 border-2 border-black flex items-center justify-center" style={{ borderRadius: '12px' }}>
+                      <Calendar size={28} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        Bu Ay
+                      </p>
+                      <p className="text-4xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        {workoutHistory.filter(w => {
+                          const workoutDate = new Date(w.endTime);
+                          const now = new Date();
+                          return workoutDate.getMonth() === now.getMonth() && workoutDate.getFullYear() === now.getFullYear();
+                        }).length}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* View History Button */}
+              <button
+                onClick={() => setView('history')}
+                className="w-full bg-white border-2 border-black py-4 hover:shadow-xl transition-shadow flex items-center justify-center gap-2"
+                style={{
+                  borderRadius: '12px',
+                  fontFamily: '"Outfit", sans-serif',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  boxShadow: '3px 3px 0px 0px rgba(0,0,0,1)'
+                }}
+              >
+                <Archive size={20} />
+                Geçmişi Görüntüle
+              </button>
+            </div>
+          );
+        }
+
+        // History View
+        if (view === 'history') {
+          return (
+            <div className="min-h-screen p-4" style={{
+              background: 'linear-gradient(#e5e5e5 1px, transparent 1px), linear-gradient(90deg, #e5e5e5 1px, transparent 1px)',
+              backgroundSize: '40px 40px',
+              backgroundColor: '#f5f5f0'
+            }}>
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6 pt-4">
+                <button
+                  onClick={() => setView('home')}
+                  className="w-10 h-10 flex items-center justify-center border-2 border-black"
+                  style={{ borderRadius: '8px' }}
+                >
+                  <ChevronLeft size={24} />
+                </button>
+
+                <h1 className="text-2xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                  Geçmiş Antrenmanlar
+                </h1>
+
+                <div className="w-10" />
+              </div>
+
+              {workoutHistory.length === 0 ? (
+                <div className="text-center py-16">
+                  <p className="text-xl" style={{ fontFamily: '"Outfit", sans-serif', color: '#999' }}>
+                    henüz antrenman kaydı yok...
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {workoutHistory.map((workout) => {
+                    const completedCount = workout.exercises.filter(e => e.completed).length;
+                    const totalCount = workout.exercises.length;
+
+                    return (
+                      <div
+                        key={workout.id}
+                        className="bg-white border-2 border-black p-4"
+                        style={{
+                          borderRadius: '12px',
+                          boxShadow: '2px 2px 0px 0px rgba(0,0,0,1)'
+                        }}
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <h3 className="text-xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                              {workout.dayName}
+                            </h3>
+                            <p className="text-sm text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                              {formatDate(workout.startTime)}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <div className="text-lg font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                              {formatTime(workout.duration)}
+                            </div>
+                            <p className="text-xs text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                              {completedCount}/{totalCount} tamamlandı
+                            </p>
+                          </div>
+                        </div>
+
+                        {workout.notes && (
+                          <div className="bg-yellow-50 border-2 border-yellow-300 p-2 mt-2" style={{ borderRadius: '6px' }}>
+                            <p className="text-sm" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                              {workout.notes}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        // Settings View
+        if (view === 'settings') {
+          return (
+            <div className="min-h-screen p-4" style={{
+              background: 'linear-gradient(#e5e5e5 1px, transparent 1px), linear-gradient(90deg, #e5e5e5 1px, transparent 1px)',
+              backgroundSize: '40px 40px',
+              backgroundColor: '#f5f5f0'
+            }}>
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6 pt-4">
+                <button
+                  onClick={() => setView('home')}
+                  className="w-10 h-10 flex items-center justify-center border-2 border-black"
+                  style={{ borderRadius: '8px' }}
+                >
+                  <ChevronLeft size={24} />
+                </button>
+
+                <h1 className="text-2xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                  Ayarlar
+                </h1>
+
+                <div className="w-10" />
+              </div>
+
+              <div className="space-y-4">
+                {/* Program Name */}
+                <div className="bg-white border-2 border-black p-4" style={{ borderRadius: '12px' }}>
+                  <label className="text-sm text-gray-500 block mb-2" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                    Program Adı
+                  </label>
+                  <input
+                    type="text"
+                    value={program.name}
+                    onChange={(e) => {
+                      const updated = { ...program, name: e.target.value };
+                      saveProgram(updated);
+                    }}
+                    className="w-full text-xl font-bold bg-transparent outline-none border-b-2 border-gray-300 pb-2"
+                    style={{ fontFamily: '"Outfit", sans-serif' }}
+                  />
+                </div>
+
+                {/* Reset Program */}
+                <button
+                  onClick={() => {
+                    if (confirm('Tüm programı sıfırlamak istediğinize emin misiniz? Bu işlem geri alınamaz!')) {
+                      const reset = createDefaultProgram();
+                      saveProgram(reset);
+                      alert('Program sıfırlandı!');
+                    }
+                  }}
+                  className="w-full bg-white border-2 border-red-500 text-red-500 py-3 hover:bg-red-50"
+                  style={{
+                    borderRadius: '10px',
+                    fontFamily: '"Outfit", sans-serif',
+                    fontSize: '16px'
+                  }}
+                >
+                  Programı Sıfırla
+                </button>
+
+                {/* Clear History */}
+                <button
+                  onClick={() => {
+                    if (confirm('Tüm antrenman geçmişini silmek istediğinize emin misiniz?')) {
+                      saveHistory([]);
+                      alert('Geçmiş silindi!');
+                    }
+                  }}
+                  className="w-full bg-white border-2 border-red-500 text-red-500 py-3 hover:bg-red-50"
+                  style={{
+                    borderRadius: '10px',
+                    fontFamily: '"Outfit", sans-serif',
+                    fontSize: '16px'
+                  }}
+                >
+                  Geçmişi Sil
+                </button>
+              </div>
+
+              {/* Info */}
+              <div className="mt-8 text-center">
+                <p className="text-sm text-gray-400" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                  Workout Tracker v1.0
+                </p>
+                <p className="text-xs text-gray-400 mt-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                  keep pushing! 💪
+                </p>
+              </div>
+            </div>
+          );
+        }
+
+        // Programs View
+        if (view === 'programs') {
+          return (
+            <div className="min-h-screen p-4 pb-24" style={{
+              background: 'linear-gradient(#e5e5e5 1px, transparent 1px), linear-gradient(90deg, #e5e5e5 1px, transparent 1px)',
+              backgroundSize: '40px 40px',
+              backgroundColor: '#f5f5f0'
+            }}>
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6 pt-4">
+                <button
+                  onClick={() => setView('home')}
+                  className="w-10 h-10 flex items-center justify-center border-2 border-black"
+                  style={{ borderRadius: '8px' }}
+                >
+                  <ChevronLeft size={24} />
+                </button>
+
+                <h1 className="text-2xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                  Programlarım
+                </h1>
+
+                <div className="w-10" />
+              </div>
+
+              {/* Programs List */}
+              <div className="space-y-4 mb-6">
+                {programs.map((prog) => {
+                  const isActive = prog.id === activeProgramId;
+                  const totalExercises = prog.days.reduce((sum, day) => sum + day.exercises.length, 0);
+
+                  return (
+                    <div
+                      key={prog.id}
+                      className={`bg-white border-2 p-4 ${isActive ? 'border-black' : 'border-gray-300'}`}
+                      style={{
+                        borderRadius: '12px',
+                        boxShadow: isActive ? '3px 3px 0px 0px rgba(0,0,0,1)' : 'none'
+                      }}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <h3 className="text-xl font-bold mb-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                            {prog.name}
+                          </h3>
+                          <p className="text-sm text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                            {totalExercises} egzersiz
+                          </p>
+                        </div>
+
+                        {!isActive && (
+                          <button
+                            onClick={() => {
+                              if (confirm(`"${prog.name}" programını silmek istediğinize emin misiniz?`)) {
+                                const updatedPrograms = programs.filter(p => p.id !== prog.id);
+                                if (updatedPrograms.length > 0) {
+                                  savePrograms(updatedPrograms);
+                                  if (activeProgramId === prog.id) {
+                                    setActiveProgram(updatedPrograms[0].id);
+                                  }
+                                } else {
+                                  alert('En az bir program olmalı!');
+                                }
+                              }
+                            }}
+                            className="p-2 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 size={18} className="text-red-500" />
+                          </button>
+                        )}
+                      </div>
+
+                      {isActive ? (
+                        <div className="bg-black text-white px-3 py-1 inline-block mt-2" style={{ borderRadius: '6px', fontFamily: '"Outfit", sans-serif', fontSize: '12px', fontWeight: '600' }}>
+                          Aktif Program
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => {
+                            setActiveProgram(prog.id);
+                            setView('home');
+                          }}
+                          className="w-full bg-white border-2 border-black py-2 mt-2 hover:bg-gray-50"
+                          style={{
+                            borderRadius: '8px',
+                            fontFamily: '"Outfit", sans-serif',
+                            fontSize: '14px',
+                            fontWeight: '600'
+                          }}
+                        >
+                          Aktif Yap
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Add New Program Button */}
+              <button
+                onClick={() => {
+                  setModalState({
+                    isOpen: true,
+                    title: 'Yeni Program Adı',
+                    placeholder: `Program ${programs.length + 1}`,
+                    initialValue: `Program ${programs.length + 1}`,
+                    onConfirm: (programName) => {
+                      if (programName) {
+                        const newProgram = createDefaultProgram();
+                        newProgram.name = programName;
+                        newProgram.id = Date.now(); // Ensure unique ID
+                        const updatedPrograms = [...programs, newProgram];
+                        savePrograms(updatedPrograms);
+                      }
+                    }
+                  });
+                }}
+                className="fixed bottom-6 left-4 right-4 bg-black text-white py-4 border-2 border-black hover:shadow-xl transition-shadow flex items-center justify-center gap-2"
+                style={{
+                  borderRadius: '12px',
+                  fontFamily: '"Outfit", sans-serif',
+                  fontSize: '16px',
+                  fontWeight: '600',
+                  boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)'
+                }}
+              >
+                <Plus size={20} />
+                Yeni Program Ekle
+              </button>
+            </div>
+          );
+        }
+
+        // Home View (default)
+        return (
+          <div className="min-h-screen p-4 pb-24" style={{
+            background: 'linear-gradient(#e5e5e5 1px, transparent 1px), linear-gradient(90deg, #e5e5e5 1px, transparent 1px)',
+            backgroundSize: '40px 40px',
+            backgroundColor: '#f5f5f0'
+          }}>
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6 pt-4">
+              <button
+                onClick={() => setView('settings')}
+                className="w-10 h-10 flex items-center justify-center border-2 border-black"
+                style={{ borderRadius: '8px' }}
+              >
+                <Settings size={24} />
+              </button>
+
+              <h1 className="text-2xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                {program.name}
+              </h1>
+
+              <button
+                onClick={() => setView('programs')}
+                className="w-10 h-10 flex items-center justify-center border-2 border-black"
+                style={{ borderRadius: '8px' }}
+              >
+                <List size={24} />
+              </button>
+            </div>
+
+            {/* Day Selector */}
+            <div className="flex justify-around mb-6">
+              {program.days.map((day, index) => (
+                <button
+                  key={day.id}
+                  onClick={() => setActiveDay(day.id)}
+                  className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${activeDayId === day.id
+                    ? 'bg-black text-white'
+                    : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-black'
+                    }`}
+                  style={{ fontFamily: '"Outfit", sans-serif' }}
+                >
+                  {day.name === 'Sunday' ? 'Pazar' : day.name}
+                </button>
+              ))}
+            </div>
+
+            {/* Exercises List */}
+            <div className="space-y-4 mb-6">
+              {activeDay.exercises.map((exercise, exerciseIndex) => (
+                <div key={exercise.id} className="bg-white border-2 border-black p-4" style={{ borderRadius: '12px' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                      {exercise.name}
+                    </h3>
+                    <button
+                      onClick={() => {
+                        const updatedProgram = { ...program };
+                        const dayIndex = updatedProgram.days.findIndex(d => d.id === activeDayId);
+                        updatedProgram.days[dayIndex].exercises = updatedProgram.days[dayIndex].exercises.filter(e => e.id !== exercise.id);
+                        saveProgram(updatedProgram);
+                      }}
+                      className="p-2 hover:bg-red-50 rounded"
+                    >
+                      <Trash2 size={18} className="text-red-500" />
+                    </button>
+                  </div>
+
+                  {exercise.sets.map((set, setIndex) => (
+                    <div key={set.id} className="flex items-center gap-2 mb-2">
+                      <span className="text-gray-500 text-sm" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        Set {setIndex + 1}
+                      </span>
+                      <input
+                        type="number"
+                        value={set.reps}
+                        onChange={(e) => {
+                          const updatedProgram = { ...program };
+                          const dayIndex = updatedProgram.days.findIndex(d => d.id === activeDayId);
+                          const exerciseIndexInDay = updatedProgram.days[dayIndex].exercises.findIndex(e => e.id === exercise.id);
+                          updatedProgram.days[dayIndex].exercises[exerciseIndexInDay].sets[setIndex].reps = parseInt(e.target.value);
+                          saveProgram(updatedProgram);
+                        }}
+                        className="w-16 border-2 border-gray-300 px-2 py-1 rounded-md text-center outline-none focus:border-black"
+                        style={{ fontFamily: '"Outfit", sans-serif' }}
+                      />
+                      <span className="text-gray-500 text-sm" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        tekrar
+                      </span>
+                      <input
+                        type="number"
+                        value={set.weight}
+                        onChange={(e) => {
+                          const updatedProgram = { ...program };
+                          const dayIndex = updatedProgram.days.findIndex(d => d.id === activeDayId);
+                          const exerciseIndexInDay = updatedProgram.days[dayIndex].exercises.findIndex(e => e.id === exercise.id);
+                          updatedProgram.days[dayIndex].exercises[exerciseIndexInDay].sets[setIndex].weight = parseFloat(e.target.value);
+                          saveProgram(updatedProgram);
+                        }}
+                        className="w-20 border-2 border-gray-300 px-2 py-1 rounded-md text-center outline-none focus:border-black"
+                        style={{ fontFamily: '"Outfit", sans-serif' }}
+                      />
+                      <span className="text-gray-500 text-sm" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        kg
+                      </span>
+                      <button
+                        onClick={() => {
+                          const updatedProgram = { ...program };
+                          const dayIndex = updatedProgram.days.findIndex(d => d.id === activeDayId);
+                          const exerciseIndexInDay = updatedProgram.days[dayIndex].exercises.findIndex(e => e.id === exercise.id);
+                          updatedProgram.days[dayIndex].exercises[exerciseIndexInDay].sets = updatedProgram.days[dayIndex].exercises[exerciseIndexInDay].sets.filter(s => s.id !== set.id);
+                          saveProgram(updatedProgram);
+                        }}
+                        className="p-1 hover:bg-red-50 rounded"
+                      >
+                        <X size={16} className="text-red-500" />
+                      </button>
+                    </div>
+                  ))}
+
+                  <button
+                    onClick={() => {
+                      const updatedProgram = { ...program };
+                      const dayIndex = updatedProgram.days.findIndex(d => d.id === activeDayId);
+                      const exerciseIndexInDay = updatedProgram.days[dayIndex].exercises.findIndex(e => e.id === exercise.id);
+                      updatedProgram.days[dayIndex].exercises[exerciseIndexInDay].sets.push({ id: Date.now(), reps: 10, weight: 0 });
+                      saveProgram(updatedProgram);
+                    }}
+                    className="w-full bg-white border-2 border-gray-300 text-gray-700 py-2 mt-2 hover:bg-gray-50"
+                    style={{
+                      borderRadius: '8px',
+                      fontFamily: '"Outfit", sans-serif',
+                      fontSize: '14px',
+                      fontWeight: '600'
+                    }}
+                  >
+                    Set Ekle
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            {/* Add Exercise Button */}
+            <button
+              onClick={() => {
+                setModalState({
+                  isOpen: true,
+                  title: 'Yeni Egzersiz Adı',
+                  placeholder: 'Örn: Bench Press',
+                  initialValue: '',
+                  options: ['Bench Press', 'Squat', 'Deadlift', 'Overhead Press', 'Barbell Row', 'Pull-up', 'Push-up', 'Dumbbell Curl', 'Triceps Extension'],
+                  onConfirm: (exerciseName) => {
+                    if (exerciseName) {
+                      const updatedProgram = { ...program };
+                      const dayIndex = updatedProgram.days.findIndex(d => d.id === activeDayId);
+                      updatedProgram.days[dayIndex].exercises.push({
+                        id: Date.now(),
+                        name: exerciseName,
+                        sets: [{ id: Date.now() + 1, reps: 10, weight: 0 }]
+                      });
+                      saveProgram(updatedProgram);
+                    }
+                  }
+                });
+              }}
+              className="fixed bottom-6 left-4 right-4 bg-black text-white py-4 border-2 border-black hover:shadow-xl transition-shadow flex items-center justify-center gap-2"
+              style={{
+                borderRadius: '12px',
+                fontFamily: '"Outfit", sans-serif',
+                fontSize: '16px',
+                fontWeight: '600',
+                boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)'
+              }}
+            >
+              <Plus size={20} />
+              Yeni Egzersiz Ekle
+            </button>
+          </div>
+        );
+      };
+
+      return (
+        <div className="antialiased min-h-screen">
+          {renderContent()}
+          <Modal
+            isOpen={modalState.isOpen}
+            title={modalState.title}
+            initialValue={modalState.initialValue}
+            placeholder={modalState.placeholder}
+            options={modalState.options}
+            onClose={() => setModalState(prev => ({ ...prev, isOpen: false }))}
+            onConfirm={(value) => {
+              if (modalState.onConfirm) {
+                modalState.onConfirm(value);
+              }
+              setModalState(prev => ({ ...prev, isOpen: false }));
+            }}
+          />
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<WorkoutTracker />);
+  </script>
+</body>
+
+</html>
