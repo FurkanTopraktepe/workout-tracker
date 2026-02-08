@@ -1,4 +1,4 @@
-# 📋 Workout Tracker (Antrenman Takipçisi)s
+# 📋 Workout Tracker (Antrenman Takipçisi)
 
 Modern, sade ve kullanıcı dostu bir antrenman takip uygulaması. **React** ve **Tailwind CSS** kullanılarak geliştirilen bu uygulama, spor salonu rutinlerinizi yönetmenize, setlerinizi kaydetmenize ve ilerlemenizi takip etmenize olanak tanır.
 
