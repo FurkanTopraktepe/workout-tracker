@@ -270,7 +270,7 @@
     };
 
     const WorkoutTracker = () => {
-      const [view, setView] = useState('home'); // home, editDay, activeWorkout, history, settings, programs
+      const [view, setView] = useState('home'); // home, editDay, activeWorkout, history, settings, programs, templates
       const [programs, setPrograms] = useState([]);
       const [activeProgramId, setActiveProgramId] = useState(null);
       const [program, setProgram] = useState(null);
@@ -279,10 +279,13 @@
       const [workoutHistory, setWorkoutHistory] = useState([]);
       const [workoutTime, setWorkoutTime] = useState(0);
       const [settings, setSettings] = useState({ weeklyGoal: 3, restSeconds: 90 });
+      const [templates, setTemplates] = useState([]);
       const [restTimer, setRestTimer] = useState({ running: false, remaining: 0, total: 0 });
       const [loading, setLoading] = useState(true);
       const [exerciseDetailModal, setExerciseDetailModal] = useState(null); // { dayIndex, exerciseId }
       const [expandedWorkoutId, setExpandedWorkoutId] = useState(null);
+      const [draggedExerciseId, setDraggedExerciseId] = useState(null);
+      const [statsMonthOffset, setStatsMonthOffset] = useState(0);
       const [modalState, setModalState] = useState({
         isOpen: false,
         title: '',
@@ -357,6 +360,14 @@
             });
           } else {
             await window.storage.set('user-settings', JSON.stringify(settings));
+          }
+
+          // Load templates
+          const templatesResult = await window.storage.get('workout-templates');
+          if (templatesResult) {
+            setTemplates(JSON.parse(templatesResult.value));
+          } else {
+            await window.storage.set('workout-templates', JSON.stringify([]));
           }
         } catch (error) {
           console.log('Error loading data:', error);
@@ -433,6 +444,15 @@
           await window.storage.set('user-settings', JSON.stringify(updatedSettings));
         } catch (error) {
           console.error('Failed to save settings:', error);
+        }
+      };
+
+      const saveTemplates = async (updatedTemplates) => {
+        setTemplates(updatedTemplates);
+        try {
+          await window.storage.set('workout-templates', JSON.stringify(updatedTemplates));
+        } catch (error) {
+          console.error('Failed to save templates:', error);
         }
       };
 
@@ -541,6 +561,62 @@
         return { current, best };
       };
 
+      const getPRs = () => {
+        const prMap = {};
+        workoutHistory.forEach(workout => {
+          workout.exercises.forEach(exercise => {
+            const name = (exercise.name || '').trim();
+            if (!name) return;
+            if (!prMap[name]) {
+              prMap[name] = {
+                name,
+                maxWeight: 0,
+                maxReps: 0,
+                lastDate: workout.endTime || workout.startTime
+              };
+            }
+            const entry = prMap[name];
+            if (exercise.weight > entry.maxWeight) {
+              entry.maxWeight = exercise.weight;
+              entry.lastDate = workout.endTime || workout.startTime;
+            }
+            if (exercise.reps > entry.maxReps) {
+              entry.maxReps = exercise.reps;
+              entry.lastDate = workout.endTime || workout.startTime;
+            }
+          });
+        });
+        return Object.values(prMap).sort((a, b) => {
+          if (b.maxWeight !== a.maxWeight) return b.maxWeight - a.maxWeight;
+          return b.maxReps - a.maxReps;
+        });
+      };
+
+      const getMonthHeatmap = (monthOffset) => {
+        const now = new Date();
+        const monthDate = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1);
+        const year = monthDate.getFullYear();
+        const month = monthDate.getMonth();
+        const monthNames = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+        const daysInMonth = new Date(year, month + 1, 0).getDate();
+        const startDay = (new Date(year, month, 1).getDay() + 6) % 7; // Monday = 0
+        const totalCells = startDay + daysInMonth;
+        const rows = Math.ceil(totalCells / 7);
+        const cells = [];
+        for (let i = 0; i < rows * 7; i += 1) {
+          const dayNum = i - startDay + 1;
+          if (dayNum < 1 || dayNum > daysInMonth) {
+            cells.push(null);
+          } else {
+            const date = new Date(year, month, dayNum);
+            const key = getDateKey(date);
+            const count = workoutHistory.filter(w => getDateKey(new Date(w.endTime || w.startTime)) === key).length;
+            cells.push({ day: dayNum, count });
+          }
+        }
+        return { monthLabel: `${monthNames[month]} ${year}`, cells };
+      };
+
       const addExerciseToDay = (dayIndex) => {
         const exercise = {
           id: Date.now(),
@@ -598,6 +674,17 @@
         saveProgram(updated);
       };
 
+      const moveExerciseToIndex = (dayIndex, exerciseId, targetIndex) => {
+        const updated = { ...program };
+        const exercises = [...updated.days[dayIndex].exercises];
+        const index = exercises.findIndex(e => e.id === exerciseId);
+        if (index === -1 || targetIndex < 0 || targetIndex >= exercises.length) return;
+        const [moved] = exercises.splice(index, 1);
+        exercises.splice(targetIndex, 0, moved);
+        updated.days[dayIndex].exercises = exercises;
+        saveProgram(updated);
+      };
+
       const startRest = (seconds) => {
         const duration = Number(seconds) || 0;
         if (duration <= 0) return;
@@ -618,6 +705,44 @@
         copy.name = `${prog.name} (Kopya)`;
         const updatedPrograms = [...programs, copy];
         savePrograms(updatedPrograms);
+      };
+
+      const createTemplateFromDay = (dayIndex, templateName) => {
+        const day = program.days[dayIndex];
+        const template = {
+          id: Date.now(),
+          name: templateName || `${day.name} Şablonu`,
+          exercises: JSON.parse(JSON.stringify(day.exercises))
+        };
+        const updatedTemplates = [template, ...templates];
+        saveTemplates(updatedTemplates);
+      };
+
+      const applyTemplateToDay = (dayIndex, template, mode) => {
+        const updated = { ...program };
+        const cloned = JSON.parse(JSON.stringify(template.exercises)).map(ex => ({
+          ...ex,
+          id: Date.now() + Math.random()
+        }));
+        if (mode === 'append') {
+          updated.days[dayIndex].exercises = [...updated.days[dayIndex].exercises, ...cloned];
+        } else {
+          updated.days[dayIndex].exercises = cloned;
+        }
+        saveProgram(updated);
+      };
+
+      const deleteTemplate = (templateId) => {
+        const updatedTemplates = templates.filter(t => t.id !== templateId);
+        saveTemplates(updatedTemplates);
+      };
+
+      const renameTemplate = (templateId, newName) => {
+        const updatedTemplates = templates.map(t => {
+          if (t.id !== templateId) return t;
+          return { ...t, name: newName };
+        });
+        saveTemplates(updatedTemplates);
       };
 
       const startWorkout = (dayIndex) => {
@@ -1106,6 +1231,77 @@
                   </button>
                 ))}
               </div>
+              <div className="text-[11px] text-gray-400 mt-2" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                Egzersizleri sürükleyip bırakarak sıralayabilirsin.
+              </div>
+            </div>
+
+            {/* Templates */}
+            <div className="mb-6">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                  Şablonlar
+                </h3>
+                <button
+                  onClick={() => {
+                    setModalState({
+                      isOpen: true,
+                      title: 'Şablon Kaydet',
+                      placeholder: `${program.days[selectedDay].name} Şablonu`,
+                      initialValue: `${program.days[selectedDay].name} Şablonu`,
+                      onConfirm: (templateName) => {
+                        if (templateName) {
+                          createTemplateFromDay(selectedDay, templateName);
+                        }
+                      }
+                    });
+                  }}
+                  className="text-xs border-2 border-black px-2 py-1"
+                  style={{ borderRadius: '999px', fontFamily: '"Outfit", sans-serif' }}
+                >
+                  + Bu günü kaydet
+                </button>
+              </div>
+              {templates.length === 0 ? (
+                <div className="text-xs text-gray-400" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                  Henüz şablon yok.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {templates.map((template) => (
+                    <div
+                      key={template.id}
+                      className="bg-white border-2 border-black p-3"
+                      style={{ borderRadius: '10px' }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-semibold text-sm" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                          {template.name}
+                        </div>
+                        <div className="text-xs text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                          {template.exercises.length} egzersiz
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => applyTemplateToDay(selectedDay, template, 'replace')}
+                          className="flex-1 border-2 border-black py-1 text-xs"
+                          style={{ borderRadius: '8px', fontFamily: '"Outfit", sans-serif' }}
+                        >
+                          Uygula
+                        </button>
+                        <button
+                          onClick={() => applyTemplateToDay(selectedDay, template, 'append')}
+                          className="flex-1 border-2 border-black py-1 text-xs"
+                          style={{ borderRadius: '8px', fontFamily: '"Outfit", sans-serif' }}
+                        >
+                          Ekle
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Exercises */}
@@ -1120,6 +1316,16 @@
                   {day.exercises.map((exercise, exerciseIndex) => (
                     <div
                       key={exercise.id}
+                      draggable
+                      onDragStart={() => setDraggedExerciseId(exercise.id)}
+                      onDragEnd={() => setDraggedExerciseId(null)}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={() => {
+                        if (draggedExerciseId) {
+                          moveExerciseToIndex(selectedDay, draggedExerciseId, exerciseIndex);
+                          setDraggedExerciseId(null);
+                        }
+                      }}
                       onClick={() => setExerciseDetailModal({ dayIndex: selectedDay, exerciseId: exercise.id })}
                       className="bg-white border-2 border-black p-4 cursor-pointer hover:shadow-lg transition-shadow"
                       style={{ borderRadius: '10px', boxShadow: '2px 2px 0px 0px rgba(0,0,0,1)' }}
@@ -1521,6 +1727,7 @@
         // Stats View
         if (view === 'stats') {
           const streaks = getStreaks();
+          const prs = getPRs().slice(0, 8);
           const dayLabels = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
           const last7Days = Array.from({ length: 7 }).map((_, i) => {
             const d = new Date();
@@ -1536,6 +1743,8 @@
             };
           });
           const maxCount = Math.max(1, ...last7Days.map(d => d.count));
+          const heatmap = getMonthHeatmap(statsMonthOffset);
+          const heatColors = ['#f0f0f0', '#c8e6c9', '#81c784', '#388e3c'];
 
           return (
             <div className="min-h-screen p-4" style={{
@@ -1684,6 +1893,94 @@
                         </div>
                       </div>
                     ))}
+                  </div>
+                </div>
+
+                {/* PRs */}
+                <div className="bg-white border-2 border-black p-5" style={{ borderRadius: '12px', boxShadow: '3px 3px 0px 0px rgba(0,0,0,1)' }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                      Kişisel Rekorlar
+                    </h3>
+                    <span className="text-xs text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                      en iyi değerler
+                    </span>
+                  </div>
+                  {prs.length === 0 ? (
+                    <div className="text-sm text-gray-400" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                      Henüz yeterli veri yok.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {prs.map((pr) => (
+                        <div key={pr.name} className="flex items-center justify-between text-sm">
+                          <span className="font-semibold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                            {pr.name}
+                          </span>
+                          <span className="text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                            {pr.maxWeight > 0 ? `${pr.maxWeight}kg` : `${pr.maxReps} tekrar`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Month Heatmap */}
+                <div className="bg-white border-2 border-black p-5" style={{ borderRadius: '12px', boxShadow: '3px 3px 0px 0px rgba(0,0,0,1)' }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <button
+                      onClick={() => setStatsMonthOffset(prev => prev - 1)}
+                      className="w-8 h-8 flex items-center justify-center border-2 border-black"
+                      style={{ borderRadius: '8px' }}
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <h3 className="text-lg font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                      {heatmap.monthLabel}
+                    </h3>
+                    <button
+                      onClick={() => setStatsMonthOffset(prev => prev + 1)}
+                      className="w-8 h-8 flex items-center justify-center border-2 border-black"
+                      style={{ borderRadius: '8px' }}
+                    >
+                      <ChevronLeft size={16} className="rotate-180" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-7 gap-2 mb-3">
+                    {['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map((label) => (
+                      <div key={label} className="text-[10px] text-gray-400 text-center" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        {label}
+                      </div>
+                    ))}
+                    {heatmap.cells.map((cell, idx) => {
+                      const level = cell ? Math.min(3, cell.count) : 0;
+                      const bg = cell ? heatColors[level] : 'transparent';
+                      return (
+                        <div
+                          key={idx}
+                          className="border-2 border-black"
+                          style={{
+                            width: '100%',
+                            aspectRatio: '1 / 1',
+                            borderRadius: '6px',
+                            backgroundColor: bg,
+                            borderColor: 'rgba(0,0,0,0.2)',
+                            opacity: cell ? 1 : 0
+                          }}
+                          title={cell ? `${cell.day}. gün • ${cell.count} antrenman` : ''}
+                        />
+                      );
+                    })}
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                    <span>Az</span>
+                    <div className="flex gap-1">
+                      {heatColors.map((color, i) => (
+                        <div key={i} style={{ width: 12, height: 12, backgroundColor: color, borderRadius: 3, border: '1px solid #111' }} />
+                      ))}
+                    </div>
+                    <span>Çok</span>
                   </div>
                 </div>
               </div>
@@ -1889,6 +2186,21 @@
                   </div>
                 </div>
 
+                {/* Templates */}
+                <button
+                  onClick={() => setView('templates')}
+                  className="w-full bg-white border-2 border-black py-3 hover:shadow-lg transition-shadow flex items-center justify-center gap-2"
+                  style={{
+                    borderRadius: '10px',
+                    fontFamily: '"Outfit", sans-serif',
+                    fontSize: '16px',
+                    fontWeight: '600',
+                    boxShadow: '2px 2px 0px 0px rgba(0,0,0,1)'
+                  }}
+                >
+                  Şablon Kütüphanesi
+                </button>
+
                 {/* Reset Program */}
                 <button
                   onClick={() => {
@@ -1938,6 +2250,111 @@
                   keep pushing! 💪
                 </p>
               </div>
+            </div>
+          );
+        }
+
+        // Templates View
+        if (view === 'templates') {
+          return (
+            <div className="min-h-screen p-4 pb-24" style={{
+              background: 'linear-gradient(#e5e5e5 1px, transparent 1px), linear-gradient(90deg, #e5e5e5 1px, transparent 1px)',
+              backgroundSize: '40px 40px',
+              backgroundColor: '#f5f5f0'
+            }}>
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6 pt-4">
+                <button
+                  onClick={() => setView('settings')}
+                  className="w-10 h-10 flex items-center justify-center border-2 border-black"
+                  style={{ borderRadius: '8px' }}
+                >
+                  <ChevronLeft size={24} />
+                </button>
+
+                <h1 className="text-2xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                  Şablon Kütüphanesi
+                </h1>
+
+                <div className="w-10" />
+              </div>
+
+              <div className="text-sm text-gray-500 mb-4" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                Bir günü şablon olarak kaydetmek için gün düzenleme ekranındaki “Bu günü kaydet” butonunu kullan.
+              </div>
+
+              {templates.length === 0 ? (
+                <div className="text-center py-16">
+                  <p className="text-xl" style={{ fontFamily: '"Outfit", sans-serif', color: '#999' }}>
+                    henüz şablon yok...
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {templates.map((template) => (
+                    <div
+                      key={template.id}
+                      className="bg-white border-2 border-black p-4"
+                      style={{
+                        borderRadius: '12px',
+                        boxShadow: '2px 2px 0px 0px rgba(0,0,0,1)'
+                      }}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <h3 className="text-xl font-bold mb-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                            {template.name}
+                          </h3>
+                          <p className="text-sm text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                            {template.exercises.length} egzersiz
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={() => {
+                              setModalState({
+                                isOpen: true,
+                                title: 'Şablonu Yeniden Adlandır',
+                                placeholder: 'Şablon Adı',
+                                initialValue: template.name,
+                                onConfirm: (name) => {
+                                  if (name) {
+                                    renameTemplate(template.id, name);
+                                  }
+                                }
+                              });
+                            }}
+                            className="p-2 hover:bg-gray-50 rounded"
+                          >
+                            <Edit2 size={18} />
+                          </button>
+                          <button
+                            onClick={() => {
+                              if (confirm(`"${template.name}" şablonunu silmek istediğinize emin misiniz?`)) {
+                                deleteTemplate(template.id);
+                              }
+                            }}
+                            className="p-2 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 size={18} className="text-red-500" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {template.exercises.length > 0 && (
+                        <div className="text-sm text-gray-600 space-y-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                          {template.exercises.slice(0, 4).map((exercise) => (
+                            <div key={exercise.id}>• {exercise.name}</div>
+                          ))}
+                          {template.exercises.length > 4 && (
+                            <div className="text-xs text-gray-400">+ {template.exercises.length - 4} egzersiz daha</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         }
