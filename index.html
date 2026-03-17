@@ -147,6 +147,34 @@
       </Icon>
     );
 
+    const Copy = (props) => (
+      <Icon {...props}>
+        <rect width="13" height="13" x="9" y="9" rx="2" ry="2" />
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+      </Icon>
+    );
+
+    const ArrowUp = (props) => (
+      <Icon {...props}>
+        <path d="M12 19V5" />
+        <path d="m5 12 7-7 7 7" />
+      </Icon>
+    );
+
+    const ArrowDown = (props) => (
+      <Icon {...props}>
+        <path d="M12 5v14" />
+        <path d="m19 12-7 7-7-7" />
+      </Icon>
+    );
+
+    const Pause = (props) => (
+      <Icon {...props}>
+        <rect x="6" y="4" width="4" height="16" rx="1" />
+        <rect x="14" y="4" width="4" height="16" rx="1" />
+      </Icon>
+    );
+
     // --- Mock window.storage for Browser ---
     if (!window.storage) {
       window.storage = {
@@ -250,8 +278,11 @@
       const [activeWorkout, setActiveWorkout] = useState(null);
       const [workoutHistory, setWorkoutHistory] = useState([]);
       const [workoutTime, setWorkoutTime] = useState(0);
+      const [settings, setSettings] = useState({ weeklyGoal: 3, restSeconds: 90 });
+      const [restTimer, setRestTimer] = useState({ running: false, remaining: 0, total: 0 });
       const [loading, setLoading] = useState(true);
       const [exerciseDetailModal, setExerciseDetailModal] = useState(null); // { dayIndex, exerciseId }
+      const [expandedWorkoutId, setExpandedWorkoutId] = useState(null);
       const [modalState, setModalState] = useState({
         isOpen: false,
         title: '',
@@ -315,6 +346,18 @@
           if (historyResult) {
             setWorkoutHistory(JSON.parse(historyResult.value));
           }
+
+          // Load settings
+          const settingsResult = await window.storage.get('user-settings');
+          if (settingsResult) {
+            const parsedSettings = JSON.parse(settingsResult.value);
+            setSettings({
+              weeklyGoal: Number(parsedSettings.weeklyGoal) || 3,
+              restSeconds: Number(parsedSettings.restSeconds) || 90
+            });
+          } else {
+            await window.storage.set('user-settings', JSON.stringify(settings));
+          }
         } catch (error) {
           console.log('Error loading data:', error);
           const defaultProgram = createDefaultProgram();
@@ -328,7 +371,6 @@
 
       const createDefaultProgram = () => {
         return {
-          id: Date.now(),
           name: 'Spor Programım',
           days: [
             { name: 'Pazartesi', exercises: [] },
@@ -385,6 +427,15 @@
         }
       };
 
+      const saveSettings = async (updatedSettings) => {
+        setSettings(updatedSettings);
+        try {
+          await window.storage.set('user-settings', JSON.stringify(updatedSettings));
+        } catch (error) {
+          console.error('Failed to save settings:', error);
+        }
+      };
+
       // Timer for active workout
       useEffect(() => {
         let interval;
@@ -396,6 +447,30 @@
         return () => clearInterval(interval);
       }, [activeWorkout]);
 
+      // Rest timer for active workout
+      useEffect(() => {
+        let interval;
+        if (restTimer.running && restTimer.remaining > 0) {
+          interval = setInterval(() => {
+            setRestTimer(prev => {
+              const next = prev.remaining - 1;
+              if (next <= 0) {
+                try {
+                  if (navigator && navigator.vibrate) {
+                    navigator.vibrate(200);
+                  }
+                } catch (error) {
+                  // ignore
+                }
+                return { ...prev, running: false, remaining: 0 };
+              }
+              return { ...prev, remaining: next };
+            });
+          }, 1000);
+        }
+        return () => clearInterval(interval);
+      }, [restTimer.running, restTimer.remaining]);
+
       const formatTime = (seconds) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
@@ -406,6 +481,64 @@
         const date = new Date(dateString);
         const months = ['Oca', 'Şub', 'Mar', 'Nis', 'May', 'Haz', 'Tem', 'Ağu', 'Eyl', 'Eki', 'Kas', 'Ara'];
         return `${months[date.getMonth()]} ${date.getDate()}`;
+      };
+
+      const formatShortTime = (seconds) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+      };
+
+      const getDateKey = (date) => {
+        const pad = (val) => val.toString().padStart(2, '0');
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+      };
+
+      const getWorkoutsInLastDays = (days) => {
+        const now = new Date();
+        const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+        return workoutHistory.filter(w => {
+          const workoutDate = new Date(w.endTime || w.startTime);
+          return workoutDate >= start;
+        }).length;
+      };
+
+      const getStreaks = () => {
+        const dateSet = new Set(
+          workoutHistory.map(w => getDateKey(new Date(w.endTime || w.startTime)))
+        );
+        const today = new Date();
+        let current = 0;
+        for (let i = 0; i < 365; i += 1) {
+          const d = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+          if (dateSet.has(getDateKey(d))) {
+            current += 1;
+          } else {
+            break;
+          }
+        }
+
+        const sortedKeys = Array.from(dateSet)
+          .map((k) => {
+            const parts = k.split('-').map(Number);
+            return new Date(parts[0], parts[1] - 1, parts[2]);
+          })
+          .sort((a, b) => a - b);
+        let best = 0;
+        let streak = 0;
+        let prev = null;
+        sortedKeys.forEach(d => {
+          if (!prev) {
+            streak = 1;
+          } else {
+            const diff = (d - prev) / (24 * 60 * 60 * 1000);
+            streak = diff === 1 ? streak + 1 : 1;
+          }
+          if (streak > best) best = streak;
+          prev = d;
+        });
+
+        return { current, best };
       };
 
       const addExerciseToDay = (dayIndex) => {
@@ -436,6 +569,55 @@
         const updated = { ...program };
         updated.days[dayIndex].exercises = updated.days[dayIndex].exercises.filter(e => e.id !== exerciseId);
         saveProgram(updated);
+      };
+
+      const addNamedExerciseToDay = (dayIndex, name) => {
+        const exercise = {
+          id: Date.now(),
+          name: name || 'Yeni Egzersiz',
+          sets: 3,
+          reps: 10,
+          weight: 0,
+          notes: '',
+          completed: false
+        };
+        const updated = { ...program };
+        updated.days[dayIndex].exercises.push(exercise);
+        saveProgram(updated);
+      };
+
+      const moveExercise = (dayIndex, exerciseId, direction) => {
+        const updated = { ...program };
+        const exercises = [...updated.days[dayIndex].exercises];
+        const index = exercises.findIndex(e => e.id === exerciseId);
+        const targetIndex = index + direction;
+        if (index === -1 || targetIndex < 0 || targetIndex >= exercises.length) return;
+        const [moved] = exercises.splice(index, 1);
+        exercises.splice(targetIndex, 0, moved);
+        updated.days[dayIndex].exercises = exercises;
+        saveProgram(updated);
+      };
+
+      const startRest = (seconds) => {
+        const duration = Number(seconds) || 0;
+        if (duration <= 0) return;
+        setRestTimer({ running: true, remaining: duration, total: duration });
+      };
+
+      const toggleRest = () => {
+        setRestTimer(prev => ({ ...prev, running: !prev.running }));
+      };
+
+      const stopRest = () => {
+        setRestTimer({ running: false, remaining: 0, total: 0 });
+      };
+
+      const duplicateProgram = (prog) => {
+        const copy = JSON.parse(JSON.stringify(prog));
+        copy.id = Date.now();
+        copy.name = `${prog.name} (Kopya)`;
+        const updatedPrograms = [...programs, copy];
+        savePrograms(updatedPrograms);
       };
 
       const startWorkout = (dayIndex) => {
@@ -473,6 +655,7 @@
 
         setActiveWorkout(null);
         setWorkoutTime(0);
+        setRestTimer({ running: false, remaining: 0, total: 0 });
         setView('home');
       };
 
@@ -480,6 +663,19 @@
         setSelectedDay(dayIndex);
         setView('editDay');
       };
+
+      const quickExercises = [
+        'Bench Press',
+        'Squat',
+        'Deadlift',
+        'Overhead Press',
+        'Pull-up',
+        'Barbell Row',
+        'Dips',
+        'Push-up',
+        'Lunge',
+        'Plank'
+      ];
 
       const renderContent = () => {
         if (loading) {
@@ -503,6 +699,9 @@
           const todayName = days[today.getDay()];
           const todayIndex = (today.getDay() + 6) % 7; // Convert to Monday = 0
           const todayProgram = program.days[todayIndex];
+          const weeklyCount = getWorkoutsInLastDays(7);
+          const weeklyGoal = Math.max(1, settings.weeklyGoal || 3);
+          const weeklyProgress = Math.min(100, Math.round((weeklyCount / weeklyGoal) * 100));
 
           return (
             <div className="min-h-screen p-5 pb-28" style={{
@@ -597,6 +796,35 @@
                       ))}
                     </div>
                   )}
+                </div>
+              </div>
+
+              {/* Weekly Goal */}
+              <div className="mb-6">
+                <div
+                  className="bg-white border-2 border-black p-4"
+                  style={{
+                    borderRadius: '16px',
+                    boxShadow: '3px 3px 0px 0px rgba(0,0,0,1)'
+                  }}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-lg font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                      Haftalık Hedef
+                    </h2>
+                    <div className="text-sm text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                      {weeklyCount} / {weeklyGoal} antrenman
+                    </div>
+                  </div>
+                  <div className="w-full h-3 border-2 border-black bg-white" style={{ borderRadius: '999px' }}>
+                    <div
+                      className="h-full bg-black"
+                      style={{ width: `${weeklyProgress}%`, borderRadius: '999px' }}
+                    />
+                  </div>
+                  <div className="text-xs text-gray-400 mt-2" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                    Son 7 gün
+                  </div>
                 </div>
               </div>
 
@@ -858,19 +1086,38 @@
                   </button>
                 </div>
 
-                <div className="w-10" />
-              </div>
+              <div className="w-10" />
+            </div>
 
-              {/* Exercises */}
-              {day.exercises.length === 0 ? (
-                <div className="text-center py-16">
-                  <p className="text-xl mb-4" style={{ fontFamily: '"Outfit", sans-serif', color: '#999' }}>
-                    henüz egzersiz yok...
+            {/* Quick Add */}
+            <div className="mb-4">
+              <h3 className="text-sm text-gray-500 mb-2" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                Hızlı Ekle
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {quickExercises.map((exerciseName) => (
+                  <button
+                    key={exerciseName}
+                    onClick={() => addNamedExerciseToDay(selectedDay, exerciseName)}
+                    className="px-3 py-1 text-xs border-2 border-black bg-white hover:bg-gray-50"
+                    style={{ borderRadius: '999px', fontFamily: '"Outfit", sans-serif' }}
+                  >
+                    + {exerciseName}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Exercises */}
+            {day.exercises.length === 0 ? (
+              <div className="text-center py-16">
+                <p className="text-xl mb-4" style={{ fontFamily: '"Outfit", sans-serif', color: '#999' }}>
+                  henüz egzersiz yok...
                   </p>
                 </div>
               ) : (
                 <div className="space-y-3 mb-20">
-                  {day.exercises.map((exercise) => (
+                  {day.exercises.map((exercise, exerciseIndex) => (
                     <div
                       key={exercise.id}
                       onClick={() => setExerciseDetailModal({ dayIndex: selectedDay, exerciseId: exercise.id })}
@@ -881,15 +1128,37 @@
                         <h3 className="text-lg font-bold flex-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
                           {exercise.name}
                         </h3>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteExercise(selectedDay, exercise.id);
-                          }}
-                          className="p-2 hover:bg-red-50 rounded"
-                        >
-                          <Trash2 size={18} className="text-red-500" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              moveExercise(selectedDay, exercise.id, -1);
+                            }}
+                            disabled={exerciseIndex === 0}
+                            className={`p-2 rounded ${exerciseIndex === 0 ? 'text-gray-300' : 'hover:bg-gray-50'}`}
+                          >
+                            <ArrowUp size={16} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              moveExercise(selectedDay, exercise.id, 1);
+                            }}
+                            disabled={exerciseIndex === day.exercises.length - 1}
+                            className={`p-2 rounded ${exerciseIndex === day.exercises.length - 1 ? 'text-gray-300' : 'hover:bg-gray-50'}`}
+                          >
+                            <ArrowDown size={16} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              deleteExercise(selectedDay, exercise.id);
+                            }}
+                            className="p-2 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 size={18} className="text-red-500" />
+                          </button>
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-4 text-sm text-gray-600" style={{ fontFamily: '"Outfit", sans-serif' }}>
@@ -1039,6 +1308,9 @@
         if (view === 'activeWorkout' && activeWorkout) {
           const completedCount = activeWorkout.exercises.filter(e => e.completed).length;
           const totalCount = activeWorkout.exercises.length;
+          const restProgress = restTimer.total > 0
+            ? Math.round(((restTimer.total - restTimer.remaining) / restTimer.total) * 100)
+            : 0;
 
           return (
             <div className="min-h-screen p-4 pb-24" style={{
@@ -1053,6 +1325,7 @@
                     if (confirm('Antrenmandan çıkmak istediğinize emin misiniz?')) {
                       setActiveWorkout(null);
                       setWorkoutTime(0);
+                      setRestTimer({ running: false, remaining: 0, total: 0 });
                       setView('home');
                     }
                   }}
@@ -1082,6 +1355,75 @@
                 <div className="text-sm text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
                   süre
                 </div>
+              </div>
+
+              {/* Rest Timer */}
+              <div className="bg-white border-2 border-black p-4 mb-6" style={{ borderRadius: '12px' }}>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                    Dinlenme Zamanlayıcı
+                  </h3>
+                  {restTimer.total > 0 && (
+                    <button
+                      onClick={stopRest}
+                      className="text-xs px-2 py-1 border-2 border-black"
+                      style={{ borderRadius: '999px', fontFamily: '"Outfit", sans-serif' }}
+                    >
+                      Sıfırla
+                    </button>
+                  )}
+                </div>
+
+                {restTimer.total === 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => startRest(settings.restSeconds || 90)}
+                      className="px-3 py-2 border-2 border-black bg-black text-white"
+                      style={{ borderRadius: '10px', fontFamily: '"Outfit", sans-serif' }}
+                    >
+                      Hızlı ({settings.restSeconds || 90}s)
+                    </button>
+                    {[60, 90, 120].map((sec) => (
+                      <button
+                        key={sec}
+                        onClick={() => startRest(sec)}
+                        className="px-3 py-2 border-2 border-black"
+                        style={{ borderRadius: '10px', fontFamily: '"Outfit", sans-serif' }}
+                      >
+                        {sec}s
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div>
+                    <div className="text-3xl font-bold mb-2 text-center" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                      {formatShortTime(restTimer.remaining)}
+                    </div>
+                    <div className="w-full h-3 border-2 border-black bg-white mb-3" style={{ borderRadius: '999px' }}>
+                      <div
+                        className="h-full bg-black"
+                        style={{ width: `${restProgress}%`, borderRadius: '999px' }}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={toggleRest}
+                        className="flex-1 py-2 border-2 border-black flex items-center justify-center gap-2"
+                        style={{ borderRadius: '10px', fontFamily: '"Outfit", sans-serif' }}
+                      >
+                        {restTimer.running ? <Pause size={18} /> : <Play size={18} />}
+                        {restTimer.running ? 'Duraklat' : 'Devam'}
+                      </button>
+                      <button
+                        onClick={stopRest}
+                        className="flex-1 py-2 border-2 border-black bg-white"
+                        style={{ borderRadius: '10px', fontFamily: '"Outfit", sans-serif' }}
+                      >
+                        Bitir
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Exercises */}
@@ -1178,6 +1520,23 @@
 
         // Stats View
         if (view === 'stats') {
+          const streaks = getStreaks();
+          const dayLabels = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+          const last7Days = Array.from({ length: 7 }).map((_, i) => {
+            const d = new Date();
+            d.setDate(d.getDate() - (6 - i));
+            const dayKey = getDateKey(d);
+            const count = workoutHistory.filter(w => {
+              const workoutKey = getDateKey(new Date(w.endTime || w.startTime));
+              return workoutKey === dayKey;
+            }).length;
+            return {
+              label: dayLabels[d.getDay()],
+              count
+            };
+          });
+          const maxCount = Math.max(1, ...last7Days.map(d => d.count));
+
           return (
             <div className="min-h-screen p-4" style={{
               background: 'linear-gradient(#e5e5e5 1px, transparent 1px), linear-gradient(90deg, #e5e5e5 1px, transparent 1px)',
@@ -1279,6 +1638,54 @@
                     </div>
                   </div>
                 </div>
+
+                {/* Streaks */}
+                <div className="bg-white border-2 border-black p-5" style={{ borderRadius: '12px', boxShadow: '3px 3px 0px 0px rgba(0,0,0,1)' }}>
+                  <div className="flex items-center gap-4">
+                    <div className="w-16 h-16 bg-yellow-200 border-2 border-black flex items-center justify-center" style={{ borderRadius: '12px' }}>
+                      <Clock size={28} />
+                    </div>
+                    <div>
+                      <p className="text-sm text-gray-500 mb-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        Seri
+                      </p>
+                      <p className="text-2xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        Şu an: {streaks.current} gün
+                      </p>
+                      <p className="text-sm text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        En iyi: {streaks.best} gün
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Last 7 Days Chart */}
+                <div className="bg-white border-2 border-black p-5" style={{ borderRadius: '12px', boxShadow: '3px 3px 0px 0px rgba(0,0,0,1)' }}>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                      Son 7 Gün
+                    </h3>
+                    <span className="text-xs text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                      antrenman sayısı
+                    </span>
+                  </div>
+                  <div className="flex items-end gap-2 h-28">
+                    {last7Days.map((day) => (
+                      <div key={day.label} className="flex-1 flex flex-col items-center gap-2">
+                        <div
+                          className="w-full bg-black"
+                          style={{
+                            height: `${Math.max(8, Math.round((day.count / maxCount) * 100))}%`,
+                            borderRadius: '6px'
+                          }}
+                        />
+                        <div className="text-xs text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                          {day.label}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {/* View History Button */}
@@ -1336,11 +1743,13 @@
                   {workoutHistory.map((workout) => {
                     const completedCount = workout.exercises.filter(e => e.completed).length;
                     const totalCount = workout.exercises.length;
+                    const isExpanded = expandedWorkoutId === workout.id;
 
                     return (
                       <div
                         key={workout.id}
-                        className="bg-white border-2 border-black p-4"
+                        onClick={() => setExpandedWorkoutId(isExpanded ? null : workout.id)}
+                        className="bg-white border-2 border-black p-4 cursor-pointer"
                         style={{
                           borderRadius: '12px',
                           boxShadow: '2px 2px 0px 0px rgba(0,0,0,1)'
@@ -1370,6 +1779,21 @@
                             <p className="text-sm" style={{ fontFamily: '"Outfit", sans-serif' }}>
                               {workout.notes}
                             </p>
+                          </div>
+                        )}
+
+                        {isExpanded && (
+                          <div className="mt-3 border-t-2 border-gray-200 pt-3 space-y-2">
+                            {workout.exercises.map((exercise) => (
+                              <div key={exercise.id} className="flex items-center justify-between text-sm">
+                                <span style={{ fontFamily: '"Outfit", sans-serif' }}>
+                                  {exercise.completed ? '✓' : '○'} {exercise.name}
+                                </span>
+                                <span className="text-gray-500" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                                  {exercise.sets}×{exercise.reps}{exercise.weight > 0 ? ` • ${exercise.weight}kg` : ''}
+                                </span>
+                              </div>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -1424,11 +1848,54 @@
                   />
                 </div>
 
+                {/* Goals */}
+                <div className="bg-white border-2 border-black p-4" style={{ borderRadius: '12px' }}>
+                  <label className="text-sm text-gray-500 block mb-3" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                    Hedefler
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        Haftalık Hedef
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={settings.weeklyGoal}
+                        onChange={(e) => {
+                          const next = Math.max(1, parseInt(e.target.value, 10) || 1);
+                          saveSettings({ ...settings, weeklyGoal: next });
+                        }}
+                        className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg outline-none focus:border-black"
+                        style={{ fontFamily: '"Outfit", sans-serif' }}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-400 block mb-1" style={{ fontFamily: '"Outfit", sans-serif' }}>
+                        Dinlenme (sn)
+                      </label>
+                      <input
+                        type="number"
+                        min="10"
+                        value={settings.restSeconds}
+                        onChange={(e) => {
+                          const next = Math.max(10, parseInt(e.target.value, 10) || 10);
+                          saveSettings({ ...settings, restSeconds: next });
+                        }}
+                        className="w-full border-2 border-gray-300 px-3 py-2 rounded-lg outline-none focus:border-black"
+                        style={{ fontFamily: '"Outfit", sans-serif' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 {/* Reset Program */}
                 <button
                   onClick={() => {
                     if (confirm('Tüm programı sıfırlamak istediğinize emin misiniz? Bu işlem geri alınamaz!')) {
                       const reset = createDefaultProgram();
+                      reset.id = program.id;
+                      reset.name = program.name;
                       saveProgram(reset);
                       alert('Program sıfırlandı!');
                     }
@@ -1525,26 +1992,35 @@
                           </p>
                         </div>
 
-                        {!isActive && (
+                        <div className="flex items-center gap-1">
                           <button
-                            onClick={() => {
-                              if (confirm(`"${prog.name}" programını silmek istediğinize emin misiniz?`)) {
-                                const updatedPrograms = programs.filter(p => p.id !== prog.id);
-                                if (updatedPrograms.length > 0) {
-                                  savePrograms(updatedPrograms);
-                                  if (activeProgramId === prog.id) {
-                                    setActiveProgram(updatedPrograms[0].id);
-                                  }
-                                } else {
-                                  alert('En az bir program olmalı!');
-                                }
-                              }
-                            }}
-                            className="p-2 hover:bg-red-50 rounded"
+                            onClick={() => duplicateProgram(prog)}
+                            className="p-2 hover:bg-gray-50 rounded"
+                            title="Kopyala"
                           >
-                            <Trash2 size={18} className="text-red-500" />
+                            <Copy size={18} />
                           </button>
-                        )}
+                          {!isActive && (
+                            <button
+                              onClick={() => {
+                                if (confirm(`"${prog.name}" programını silmek istediğinize emin misiniz?`)) {
+                                  const updatedPrograms = programs.filter(p => p.id !== prog.id);
+                                  if (updatedPrograms.length > 0) {
+                                    savePrograms(updatedPrograms);
+                                    if (activeProgramId === prog.id) {
+                                      setActiveProgram(updatedPrograms[0].id);
+                                    }
+                                  } else {
+                                    alert('En az bir program olmalı!');
+                                  }
+                                }
+                              }}
+                              className="p-2 hover:bg-red-50 rounded"
+                            >
+                              <Trash2 size={18} className="text-red-500" />
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       {isActive ? (
@@ -1608,185 +2084,7 @@
           );
         }
 
-        // Home View (default)
-        return (
-          <div className="min-h-screen p-4 pb-24" style={{
-            background: 'linear-gradient(#e5e5e5 1px, transparent 1px), linear-gradient(90deg, #e5e5e5 1px, transparent 1px)',
-            backgroundSize: '40px 40px',
-            backgroundColor: '#f5f5f0'
-          }}>
-            {/* Header */}
-            <div className="flex items-center justify-between mb-6 pt-4">
-              <button
-                onClick={() => setView('settings')}
-                className="w-10 h-10 flex items-center justify-center border-2 border-black"
-                style={{ borderRadius: '8px' }}
-              >
-                <Settings size={24} />
-              </button>
-
-              <h1 className="text-2xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
-                {program.name}
-              </h1>
-
-              <button
-                onClick={() => setView('programs')}
-                className="w-10 h-10 flex items-center justify-center border-2 border-black"
-                style={{ borderRadius: '8px' }}
-              >
-                <List size={24} />
-              </button>
-            </div>
-
-            {/* Day Selector */}
-            <div className="flex justify-around mb-6">
-              {program.days.map((day, index) => (
-                <button
-                  key={day.id}
-                  onClick={() => setActiveDay(day.id)}
-                  className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors ${activeDayId === day.id
-                    ? 'bg-black text-white'
-                    : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-black'
-                    }`}
-                  style={{ fontFamily: '"Outfit", sans-serif' }}
-                >
-                  {day.name === 'Sunday' ? 'Pazar' : day.name}
-                </button>
-              ))}
-            </div>
-
-            {/* Exercises List */}
-            <div className="space-y-4 mb-6">
-              {activeDay.exercises.map((exercise, exerciseIndex) => (
-                <div key={exercise.id} className="bg-white border-2 border-black p-4" style={{ borderRadius: '12px' }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-xl font-bold" style={{ fontFamily: '"Outfit", sans-serif' }}>
-                      {exercise.name}
-                    </h3>
-                    <button
-                      onClick={() => {
-                        const updatedProgram = { ...program };
-                        const dayIndex = updatedProgram.days.findIndex(d => d.id === activeDayId);
-                        updatedProgram.days[dayIndex].exercises = updatedProgram.days[dayIndex].exercises.filter(e => e.id !== exercise.id);
-                        saveProgram(updatedProgram);
-                      }}
-                      className="p-2 hover:bg-red-50 rounded"
-                    >
-                      <Trash2 size={18} className="text-red-500" />
-                    </button>
-                  </div>
-
-                  {exercise.sets.map((set, setIndex) => (
-                    <div key={set.id} className="flex items-center gap-2 mb-2">
-                      <span className="text-gray-500 text-sm" style={{ fontFamily: '"Outfit", sans-serif' }}>
-                        Set {setIndex + 1}
-                      </span>
-                      <input
-                        type="number"
-                        value={set.reps}
-                        onChange={(e) => {
-                          const updatedProgram = { ...program };
-                          const dayIndex = updatedProgram.days.findIndex(d => d.id === activeDayId);
-                          const exerciseIndexInDay = updatedProgram.days[dayIndex].exercises.findIndex(e => e.id === exercise.id);
-                          updatedProgram.days[dayIndex].exercises[exerciseIndexInDay].sets[setIndex].reps = parseInt(e.target.value);
-                          saveProgram(updatedProgram);
-                        }}
-                        className="w-16 border-2 border-gray-300 px-2 py-1 rounded-md text-center outline-none focus:border-black"
-                        style={{ fontFamily: '"Outfit", sans-serif' }}
-                      />
-                      <span className="text-gray-500 text-sm" style={{ fontFamily: '"Outfit", sans-serif' }}>
-                        tekrar
-                      </span>
-                      <input
-                        type="number"
-                        value={set.weight}
-                        onChange={(e) => {
-                          const updatedProgram = { ...program };
-                          const dayIndex = updatedProgram.days.findIndex(d => d.id === activeDayId);
-                          const exerciseIndexInDay = updatedProgram.days[dayIndex].exercises.findIndex(e => e.id === exercise.id);
-                          updatedProgram.days[dayIndex].exercises[exerciseIndexInDay].sets[setIndex].weight = parseFloat(e.target.value);
-                          saveProgram(updatedProgram);
-                        }}
-                        className="w-20 border-2 border-gray-300 px-2 py-1 rounded-md text-center outline-none focus:border-black"
-                        style={{ fontFamily: '"Outfit", sans-serif' }}
-                      />
-                      <span className="text-gray-500 text-sm" style={{ fontFamily: '"Outfit", sans-serif' }}>
-                        kg
-                      </span>
-                      <button
-                        onClick={() => {
-                          const updatedProgram = { ...program };
-                          const dayIndex = updatedProgram.days.findIndex(d => d.id === activeDayId);
-                          const exerciseIndexInDay = updatedProgram.days[dayIndex].exercises.findIndex(e => e.id === exercise.id);
-                          updatedProgram.days[dayIndex].exercises[exerciseIndexInDay].sets = updatedProgram.days[dayIndex].exercises[exerciseIndexInDay].sets.filter(s => s.id !== set.id);
-                          saveProgram(updatedProgram);
-                        }}
-                        className="p-1 hover:bg-red-50 rounded"
-                      >
-                        <X size={16} className="text-red-500" />
-                      </button>
-                    </div>
-                  ))}
-
-                  <button
-                    onClick={() => {
-                      const updatedProgram = { ...program };
-                      const dayIndex = updatedProgram.days.findIndex(d => d.id === activeDayId);
-                      const exerciseIndexInDay = updatedProgram.days[dayIndex].exercises.findIndex(e => e.id === exercise.id);
-                      updatedProgram.days[dayIndex].exercises[exerciseIndexInDay].sets.push({ id: Date.now(), reps: 10, weight: 0 });
-                      saveProgram(updatedProgram);
-                    }}
-                    className="w-full bg-white border-2 border-gray-300 text-gray-700 py-2 mt-2 hover:bg-gray-50"
-                    style={{
-                      borderRadius: '8px',
-                      fontFamily: '"Outfit", sans-serif',
-                      fontSize: '14px',
-                      fontWeight: '600'
-                    }}
-                  >
-                    Set Ekle
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            {/* Add Exercise Button */}
-            <button
-              onClick={() => {
-                setModalState({
-                  isOpen: true,
-                  title: 'Yeni Egzersiz Adı',
-                  placeholder: 'Örn: Bench Press',
-                  initialValue: '',
-                  options: ['Bench Press', 'Squat', 'Deadlift', 'Overhead Press', 'Barbell Row', 'Pull-up', 'Push-up', 'Dumbbell Curl', 'Triceps Extension'],
-                  onConfirm: (exerciseName) => {
-                    if (exerciseName) {
-                      const updatedProgram = { ...program };
-                      const dayIndex = updatedProgram.days.findIndex(d => d.id === activeDayId);
-                      updatedProgram.days[dayIndex].exercises.push({
-                        id: Date.now(),
-                        name: exerciseName,
-                        sets: [{ id: Date.now() + 1, reps: 10, weight: 0 }]
-                      });
-                      saveProgram(updatedProgram);
-                    }
-                  }
-                });
-              }}
-              className="fixed bottom-6 left-4 right-4 bg-black text-white py-4 border-2 border-black hover:shadow-xl transition-shadow flex items-center justify-center gap-2"
-              style={{
-                borderRadius: '12px',
-                fontFamily: '"Outfit", sans-serif',
-                fontSize: '16px',
-                fontWeight: '600',
-                boxShadow: '4px 4px 0px 0px rgba(0,0,0,1)'
-              }}
-            >
-              <Plus size={20} />
-              Yeni Egzersiz Ekle
-            </button>
-          </div>
-        );
+        return null;
       };
 
       return (
